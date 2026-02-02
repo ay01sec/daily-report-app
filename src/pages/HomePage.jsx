@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/common/Header';
@@ -29,20 +29,31 @@ export default function HomePage() {
         const startDate = new Date(year, month - 1, 1);
         const endDate = new Date(year, month, 0, 23, 59, 59);
 
+        // 複合インデックス問題を回避するため、createdByのみでフィルタリング
         const reportsRef = collection(db, 'companies', companyId, 'dailyReports');
         const q = query(
           reportsRef,
-          where('createdBy', '==', currentUser.uid),
-          where('reportDate', '>=', startDate),
-          where('reportDate', '<=', endDate),
-          orderBy('reportDate', 'desc')
+          where('createdBy', '==', currentUser.uid)
         );
 
         const snapshot = await getDocs(q);
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+
+        // クライアント側で日付フィルタリングとソートを行う
+        const data = snapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter((report) => {
+            if (!report.reportDate) return false;
+            const reportDate = report.reportDate.toDate ? report.reportDate.toDate() : new Date(report.reportDate);
+            return reportDate >= startDate && reportDate <= endDate;
+          })
+          .sort((a, b) => {
+            const dateA = a.reportDate?.toDate ? a.reportDate.toDate() : new Date(a.reportDate);
+            const dateB = b.reportDate?.toDate ? b.reportDate.toDate() : new Date(b.reportDate);
+            return dateB - dateA; // 降順
+          });
 
         setReports(data);
       } catch (error) {

@@ -113,7 +113,7 @@ export default function ReportForm({
     }));
   };
 
-  const buildReportData = (forOffline = false) => {
+  const buildReportData = (forOffline = false, isUpdate = false) => {
     const reportDate = fromDateInputValue(formData.reportDate);
 
     const data = {
@@ -132,19 +132,23 @@ export default function ReportForm({
         remarks: w.remarks || '',
       })),
       notes: formData.notes || '',
-      status: 'draft',
-      submittedAt: null,
-      clientSignature: {
+    };
+
+    // 新規作成時のみ初期値を設定（更新時はリセットしない）
+    if (!isUpdate) {
+      data.status = 'draft';
+      data.submittedAt = null;
+      data.clientSignature = {
         imageUrl: null,
         signedAt: null,
         signerName: null,
-      },
-      approval: {
+      };
+      data.approval = {
         approvedBy: null,
         approvedByName: null,
         approvedAt: null,
-      },
-    };
+      };
+    }
 
     if (!forOffline) {
       data.updatedAt = serverTimestamp();
@@ -163,7 +167,7 @@ export default function ReportForm({
     setSaving(true);
     try {
       if (!online) {
-        const data = buildReportData(true);
+        const data = buildReportData(true, !!reportId);
         queueForSync(data);
         clearOffline('new');
         alert('オフラインのため、ローカルに保存しました。オンライン復帰時に同期されます。');
@@ -171,7 +175,7 @@ export default function ReportForm({
         return;
       }
 
-      const data = buildReportData();
+      const data = buildReportData(false, !!reportId);
 
       if (reportId) {
         await updateDoc(doc(db, 'companies', companyId, 'dailyReports', reportId), {
@@ -188,7 +192,7 @@ export default function ReportForm({
     } catch (err) {
       console.error('保存エラー:', err);
       if (!online) {
-        const data = buildReportData(true);
+        const data = buildReportData(true, !!reportId);
         queueForSync(data);
         clearOffline('new');
         alert('保存に失敗しました。ローカルに保存しました。');
@@ -215,7 +219,7 @@ export default function ReportForm({
 
     setSaving(true);
     try {
-      const data = buildReportData();
+      const data = buildReportData(false, !!reportId);
       let newReportId = reportId;
 
       if (reportId) {
