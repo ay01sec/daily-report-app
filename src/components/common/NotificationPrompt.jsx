@@ -3,9 +3,8 @@ import { useNotification } from '../../hooks/useNotification';
 
 export default function NotificationPrompt() {
   const { permission, loading, isSupported, requestPermission } = useNotification();
-  const [dismissed, setDismissed] = useState(() => {
-    return localStorage.getItem('notification_prompt_dismissed') === 'true';
-  });
+  // ページリフレッシュ時に再表示するため、localStorageではなくstateのみで管理
+  const [dismissed, setDismissed] = useState(false);
 
   if (!isSupported || permission === 'granted' || permission === 'denied' || dismissed) {
     return null;
@@ -17,7 +16,6 @@ export default function NotificationPrompt() {
 
   const handleDismiss = () => {
     setDismissed(true);
-    localStorage.setItem('notification_prompt_dismissed', 'true');
   };
 
   return (
