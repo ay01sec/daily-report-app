@@ -1,13 +1,62 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
-const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { onDocumentUpdated, onDocumentCreated } = require('firebase-functions/v2/firestore');
 const { initializeApp } = require('firebase-admin/app');
-const { getFirestore, Timestamp } = require('firebase-admin/firestore');
+const { getFirestore, Timestamp, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 
 initializeApp();
 
 const db = getFirestore();
 const messaging = getMessaging();
+
+/**
+ * 企業作成時に自動で連番の企業IDを付与
+ */
+exports.assignCompanyCode = onDocumentCreated(
+  {
+    document: 'companies/{companyId}',
+    region: 'asia-northeast1',
+  },
+  async (event) => {
+    const companyId = event.params.companyId;
+    const companyData = event.data.data();
+
+    // 既にcompanyCodeが設定されている場合はスキップ
+    if (companyData.companyCode) {
+      console.log(`企業 ${companyId} は既にcompanyCodeを持っています: ${companyData.companyCode}`);
+      return;
+    }
+
+    try {
+      // カウンターを取得・更新（トランザクションで排他制御）
+      const counterRef = db.collection('settings').doc('companyCodeCounter');
+
+      const newCompanyCode = await db.runTransaction(async (transaction) => {
+        const counterDoc = await transaction.get(counterRef);
+
+        let nextCode = 0;
+        if (counterDoc.exists) {
+          nextCode = counterDoc.data().lastCode + 1;
+        }
+
+        // カウンターを更新
+        transaction.set(counterRef, { lastCode: nextCode }, { merge: true });
+
+        // 8桁のゼロ埋め文字列に変換
+        return String(nextCode).padStart(8, '0');
+      });
+
+      // 企業ドキュメントにcompanyCodeを設定
+      await db.collection('companies').doc(companyId).update({
+        companyCode: newCompanyCode
+      });
+
+      console.log(`企業 ${companyId} に企業ID ${newCompanyCode} を割り当てました`);
+    } catch (error) {
+      console.error('企業ID割り当てエラー:', error);
+    }
+  }
+);
 
 /**
  * 時刻が現在時刻の±7分以内かチェック
