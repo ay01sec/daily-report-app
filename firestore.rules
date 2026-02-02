@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ヘルパー関数
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/companies/$(resource.data.companyId)/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin(companyId) {
+      return get(/databases/$(database)/documents/companies/$(companyId)/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isManagerOrAbove(companyId) {
+      let role = get(/databases/$(database)/documents/companies/$(companyId)/users/$(request.auth.uid)).data.role;
+      return role == 'admin' || role == 'manager';
+    }
+
+
+    // カスタム通知コレクション
+    match /customNotifications/{notificationId} {
+      // 読み取り：同一企業のadmin/manager
+      allow read: if isAuthenticated() &&
+        isManagerOrAbove(resource.data.companyId);
+
+      // 作成・更新・削除：adminのみ
+      allow create, update, delete: if isAuthenticated() &&
+        isAdmin(request.resource.data.companyId);
+    }
+
+    // 企業コレクション（サブコレクション含む）
+    match /companies/{companyId} {
+      allow read: if isAuthenticated();
+
+      match /users/{userId} {
+        allow read: if isAuthenticated();
+        allow update: if isAuthenticated() && request.auth.uid == userId;
+      }
+
+      match /employees/{employeeId} {
+        allow read: if isAuthenticated();
+      }
+
+      match /sites/{siteId} {
+        allow read: if isAuthenticated();
+      }
+
+      match /clients/{clientId} {
+        allow read: if isAuthenticated();
+      }
+
+      // 日報コレクション（サブコレクション）
+      match /dailyReports/{reportId} {
+        // 読み取り：自分が作成した日報、またはadmin/manager
+        allow read: if isAuthenticated() && (
+          resource.data.createdBy == request.auth.uid ||
+          isManagerOrAbove(companyId)
+        );
+
+        // 作成：認証済みユーザー
+        allow create: if isAuthenticated();
+
+        // 更新：作成者本人（draft/signed/rejectedのみ）、またはadmin（承認操作）
+        allow update: if isAuthenticated() && (
+          (resource.data.createdBy == request.auth.uid &&
+           resource.data.status in ['draft', 'signed', 'rejected']) ||
+          isAdmin(companyId)
+        );
+
+        // 削除：adminのみ
+        allow delete: if isAuthenticated() &&
+          isAdmin(companyId);
+      }
+    }
+  }
+}

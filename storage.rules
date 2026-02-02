@@ -1,0 +1,18 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // 署名画像
+    match /signatures/{companyId}/{reportId}/{fileName} {
+      // 読み取り：認証済みユーザー
+      allow read: if request.auth != null;
+
+      // 書き込み：認証済みユーザー（同一企業）
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024  // 5MB制限
+        && request.resource.contentType.matches('image/.*');
+
+      // 削除：認証済みユーザー
+      allow delete: if request.auth != null;
+    }
+  }
+}
