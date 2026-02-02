@@ -33,7 +33,9 @@ service cloud.firestore {
 
     // 企業コレクション（サブコレクション含む）
     match /companies/{companyId} {
-      allow read: if isAuthenticated();
+      // 読み取り：未認証でも許可（企業コード検証のため）
+      // ※ 企業基本情報のみ。機密情報は別途保護
+      allow read: if true;
       // adminのみ企業情報を更新可能
       allow update: if isAuthenticated() && isAdmin(companyId);
 

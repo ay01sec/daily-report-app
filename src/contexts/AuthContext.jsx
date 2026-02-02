@@ -30,7 +30,7 @@ export function AuthProvider({ children }) {
   const [companyInfo, setCompanyInfo] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 企業コードで企業を検索（認証済み状態で呼び出す）
+  // 企業コードで企業を検索（未認証でも可能）
   async function findCompanyByCode(companyCode) {
     const companiesRef = collection(db, 'companies');
     const q = query(companiesRef, where('companyCode', '==', companyCode));
@@ -49,14 +49,14 @@ export function AuthProvider({ children }) {
 
   // 企業コード + メールアドレス + パスワードでログイン
   async function login(companyCode, email, password) {
-    // 1. まずFirebase Authenticationでログイン（認証状態にする）
+    // 1. 先に企業コードで企業を検索（未認証状態で検証）
+    const company = await findCompanyByCode(companyCode);
+
+    // 2. Firebase Authenticationでログイン
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
     try {
-      // 2. 認証後に企業コードで企業を検索
-      const company = await findCompanyByCode(companyCode);
-
       // 3. その企業にユーザーが存在するか確認
       const userDocRef = doc(db, 'companies', company.id, 'users', user.uid);
       const userDocSnap = await getDoc(userDocRef);
