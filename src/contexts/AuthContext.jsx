@@ -30,7 +30,7 @@ export function AuthProvider({ children }) {
   const [companyInfo, setCompanyInfo] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 企業コードで企業を検索
+  // 企業コードで企業を検索（認証済み状態で呼び出す）
   async function findCompanyByCode(companyCode) {
     const companiesRef = collection(db, 'companies');
     const q = query(companiesRef, where('companyCode', '==', companyCode));
@@ -49,46 +49,52 @@ export function AuthProvider({ children }) {
 
   // 企業コード + メールアドレス + パスワードでログイン
   async function login(companyCode, email, password) {
-    // 1. 企業コードで企業を検索
-    const company = await findCompanyByCode(companyCode);
-
-    // 2. Firebase Authenticationでログイン
+    // 1. まずFirebase Authenticationでログイン（認証状態にする）
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // 3. その企業にユーザーが存在するか確認
-    const userDocRef = doc(db, 'companies', company.id, 'users', user.uid);
-    const userDocSnap = await getDoc(userDocRef);
+    try {
+      // 2. 認証後に企業コードで企業を検索
+      const company = await findCompanyByCode(companyCode);
 
-    if (!userDocSnap.exists()) {
+      // 3. その企業にユーザーが存在するか確認
+      const userDocRef = doc(db, 'companies', company.id, 'users', user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (!userDocSnap.exists()) {
+        await signOut(auth);
+        throw new Error('この企業IDに登録されていないユーザーです');
+      }
+
+      const userData = userDocSnap.data();
+
+      if (!userData.isActive) {
+        await signOut(auth);
+        throw new Error('このアカウントは無効化されています');
+      }
+
+      // 4. 最終ログイン日時を更新
+      await updateDoc(userDocRef, {
+        lastLoginAt: serverTimestamp()
+      });
+
+      // 5. 状態を更新
+      setCompanyId(company.id);
+      setCompanyInfo(company);
+      setUserInfo({
+        id: user.uid,
+        ...userData
+      });
+
+      // 企業コードをローカルストレージに保存（次回ログイン時の利便性向上）
+      localStorage.setItem('lastCompanyCode', companyCode);
+
+      return user;
+    } catch (error) {
+      // エラー時はログアウトして再スロー
       await signOut(auth);
-      throw new Error('この企業にユーザーが登録されていません');
+      throw error;
     }
-
-    const userData = userDocSnap.data();
-
-    if (!userData.isActive) {
-      await signOut(auth);
-      throw new Error('このアカウントは無効化されています');
-    }
-
-    // 4. 最終ログイン日時を更新
-    await updateDoc(userDocRef, {
-      lastLoginAt: serverTimestamp()
-    });
-
-    // 5. 状態を更新
-    setCompanyId(company.id);
-    setCompanyInfo(company);
-    setUserInfo({
-      id: user.uid,
-      ...userData
-    });
-
-    // 企業コードをローカルストレージに保存（次回ログイン時の利便性向上）
-    localStorage.setItem('lastCompanyCode', companyCode);
-
-    return user;
   }
 
   // パスワードリセットメールを送信
