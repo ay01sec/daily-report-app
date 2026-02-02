@@ -2,11 +2,14 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import {
   signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import {
   collection,
   getDocs,
+  query,
+  where,
   doc,
   getDoc,
   updateDoc,
@@ -27,9 +30,70 @@ export function AuthProvider({ children }) {
   const [companyInfo, setCompanyInfo] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  async function login(email, password) {
+  // 企業コードで企業を検索
+  async function findCompanyByCode(companyCode) {
+    const companiesRef = collection(db, 'companies');
+    const q = query(companiesRef, where('companyCode', '==', companyCode));
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+      throw new Error('企業IDが見つかりません');
+    }
+
+    const companyDoc = snapshot.docs[0];
+    return {
+      id: companyDoc.id,
+      ...companyDoc.data()
+    };
+  }
+
+  // 企業コード + メールアドレス + パスワードでログイン
+  async function login(companyCode, email, password) {
+    // 1. 企業コードで企業を検索
+    const company = await findCompanyByCode(companyCode);
+
+    // 2. Firebase Authenticationでログイン
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    return userCredential.user;
+    const user = userCredential.user;
+
+    // 3. その企業にユーザーが存在するか確認
+    const userDocRef = doc(db, 'companies', company.id, 'users', user.uid);
+    const userDocSnap = await getDoc(userDocRef);
+
+    if (!userDocSnap.exists()) {
+      await signOut(auth);
+      throw new Error('この企業にユーザーが登録されていません');
+    }
+
+    const userData = userDocSnap.data();
+
+    if (!userData.isActive) {
+      await signOut(auth);
+      throw new Error('このアカウントは無効化されています');
+    }
+
+    // 4. 最終ログイン日時を更新
+    await updateDoc(userDocRef, {
+      lastLoginAt: serverTimestamp()
+    });
+
+    // 5. 状態を更新
+    setCompanyId(company.id);
+    setCompanyInfo(company);
+    setUserInfo({
+      id: user.uid,
+      ...userData
+    });
+
+    // 企業コードをローカルストレージに保存（次回ログイン時の利便性向上）
+    localStorage.setItem('lastCompanyCode', companyCode);
+
+    return user;
+  }
+
+  // パスワードリセットメールを送信
+  async function resetPassword(email) {
+    await sendPasswordResetEmail(auth, email);
   }
 
   async function logout() {
@@ -118,6 +182,7 @@ export function AuthProvider({ children }) {
     companyInfo,
     login,
     logout,
+    resetPassword,
     isAdmin,
     isManagerOrAbove,
     loading

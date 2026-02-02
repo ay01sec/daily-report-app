@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function LoginPage() {
+  const [companyCode, setCompanyCode] = useState(() => {
+    return localStorage.getItem('lastCompanyCode') || '';
+  });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -14,13 +17,25 @@ export default function LoginPage() {
 
   const from = location.state?.from?.pathname || '/';
 
+  const handleCompanyCodeChange = (e) => {
+    // 数字のみ許可、最大8桁
+    const value = e.target.value.replace(/\D/g, '').slice(0, 8);
+    setCompanyCode(value);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (companyCode.length !== 8) {
+      setError('企業IDは8桁の数字で入力してください');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      await login(email, password);
+      await login(companyCode, email, password);
       navigate(from, { replace: true });
     } catch (err) {
       console.error('ログインエラー:', err);
@@ -57,6 +72,28 @@ export default function LoginPage() {
                 {error}
               </div>
             )}
+
+            <div>
+              <label
+                htmlFor="companyCode"
+                className="block text-sm font-medium text-gray-700"
+              >
+                企業ID
+              </label>
+              <input
+                id="companyCode"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                required
+                value={companyCode}
+                onChange={handleCompanyCodeChange}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base tracking-widest"
+                placeholder="12345678"
+                maxLength={8}
+              />
+              <p className="mt-1 text-xs text-gray-500">8桁の数字</p>
+            </div>
 
             <div>
               <label
@@ -102,6 +139,15 @@ export default function LoginPage() {
               {loading ? 'ログイン中...' : 'ログイン'}
             </button>
           </form>
+
+          <div className="mt-6 text-center">
+            <Link
+              to="/forgot-password"
+              className="text-sm text-blue-600 hover:text-blue-800"
+            >
+              パスワードをお忘れですか？
+            </Link>
+          </div>
         </div>
       </div>
     </div>
