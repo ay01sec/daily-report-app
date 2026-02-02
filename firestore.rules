@@ -46,14 +46,17 @@ service cloud.firestore {
 
       match /employees/{employeeId} {
         allow read: if isAuthenticated();
+        allow create, update, delete: if isAuthenticated() && isAdmin(companyId);
       }
 
       match /sites/{siteId} {
         allow read: if isAuthenticated();
+        allow create, update, delete: if isAuthenticated() && isAdmin(companyId);
       }
 
       match /clients/{clientId} {
         allow read: if isAuthenticated();
+        allow create, update, delete: if isAuthenticated() && isAdmin(companyId);
       }
 
       // 日報コレクション（サブコレクション）
