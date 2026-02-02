@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -7,6 +7,7 @@ import Header from '../components/common/Header';
 import StatusBadge from '../components/common/StatusBadge';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import NotificationPrompt from '../components/common/NotificationPrompt';
+import PullToRefresh from '../components/common/PullToRefresh';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
@@ -19,52 +20,52 @@ export default function HomePage() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
 
-  useEffect(() => {
+  const fetchReports = useCallback(async () => {
     if (!companyId || !currentUser) return;
 
-    const fetchReports = async () => {
-      setLoading(true);
-      try {
-        const [year, month] = selectedMonth.split('-').map(Number);
-        const startDate = new Date(year, month - 1, 1);
-        const endDate = new Date(year, month, 0, 23, 59, 59);
+    setLoading(true);
+    try {
+      const [year, month] = selectedMonth.split('-').map(Number);
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0, 23, 59, 59);
 
-        // 複合インデックス問題を回避するため、createdByのみでフィルタリング
-        const reportsRef = collection(db, 'companies', companyId, 'dailyReports');
-        const q = query(
-          reportsRef,
-          where('createdBy', '==', currentUser.uid)
-        );
+      // 複合インデックス問題を回避するため、createdByのみでフィルタリング
+      const reportsRef = collection(db, 'companies', companyId, 'dailyReports');
+      const q = query(
+        reportsRef,
+        where('createdBy', '==', currentUser.uid)
+      );
 
-        const snapshot = await getDocs(q);
+      const snapshot = await getDocs(q);
 
-        // クライアント側で日付フィルタリングとソートを行う
-        const data = snapshot.docs
-          .map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
-          .filter((report) => {
-            if (!report.reportDate) return false;
-            const reportDate = report.reportDate.toDate ? report.reportDate.toDate() : new Date(report.reportDate);
-            return reportDate >= startDate && reportDate <= endDate;
-          })
-          .sort((a, b) => {
-            const dateA = a.reportDate?.toDate ? a.reportDate.toDate() : new Date(a.reportDate);
-            const dateB = b.reportDate?.toDate ? b.reportDate.toDate() : new Date(b.reportDate);
-            return dateB - dateA; // 降順
-          });
+      // クライアント側で日付フィルタリングとソートを行う
+      const data = snapshot.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+        .filter((report) => {
+          if (!report.reportDate) return false;
+          const reportDate = report.reportDate.toDate ? report.reportDate.toDate() : new Date(report.reportDate);
+          return reportDate >= startDate && reportDate <= endDate;
+        })
+        .sort((a, b) => {
+          const dateA = a.reportDate?.toDate ? a.reportDate.toDate() : new Date(a.reportDate);
+          const dateB = b.reportDate?.toDate ? b.reportDate.toDate() : new Date(b.reportDate);
+          return dateB - dateA; // 降順
+        });
 
-        setReports(data);
-      } catch (error) {
-        console.error('日報取得エラー:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchReports();
+      setReports(data);
+    } catch (error) {
+      console.error('日報取得エラー:', error);
+    } finally {
+      setLoading(false);
+    }
   }, [companyId, currentUser, selectedMonth]);
+
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
 
   const formatDate = (timestamp) => {
     if (!timestamp) return '';
@@ -87,11 +88,12 @@ export default function HomePage() {
   const rejectedReports = reports.filter((r) => r.status === 'rejected');
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
+    <PullToRefresh onRefresh={fetchReports}>
+      <div className="min-h-screen bg-gray-50">
+        <Header />
 
-      <main className="px-4 py-6 max-w-lg mx-auto">
-        <NotificationPrompt />
+        <main className="px-4 py-6 max-w-lg mx-auto">
+          <NotificationPrompt />
 
         {rejectedReports.length > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
@@ -175,6 +177,7 @@ export default function HomePage() {
           </div>
         )}
       </main>
-    </div>
+      </div>
+    </PullToRefresh>
   );
 }
