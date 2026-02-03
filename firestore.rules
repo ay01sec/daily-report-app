@@ -41,7 +41,11 @@ service cloud.firestore {
 
       match /users/{userId} {
         allow read: if isAuthenticated();
-        allow update: if isAuthenticated() && request.auth.uid == userId;
+        // 自分自身の更新、またはadminによる更新を許可
+        allow update: if isAuthenticated() &&
+          (request.auth.uid == userId || isAdmin(companyId));
+        // 作成・削除はadminのみ
+        allow create, delete: if isAuthenticated() && isAdmin(companyId);
       }
 
       match /employees/{employeeId} {

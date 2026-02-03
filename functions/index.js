@@ -1,8 +1,10 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onDocumentUpdated, onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, Timestamp, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
+const { getAuth } = require('firebase-admin/auth');
 
 initializeApp();
 
@@ -373,6 +375,84 @@ exports.customNotifications = onSchedule(
       console.log('カスタム通知チェック完了');
     } catch (error) {
       console.error('カスタム通知処理エラー:', error);
+    }
+  }
+);
+
+/**
+ * ユーザー削除（Admin権限が必要）
+ * Firebase AuthとFirestoreの両方からユーザーを削除
+ */
+exports.deleteUser = onCall(
+  {
+    region: 'asia-northeast1',
+  },
+  async (request) => {
+    // 認証チェック
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', '認証が必要です');
+    }
+
+    const { targetUserId, companyId } = request.data;
+    const callerUid = request.auth.uid;
+
+    if (!targetUserId || !companyId) {
+      throw new HttpsError('invalid-argument', 'targetUserIdとcompanyIdは必須です');
+    }
+
+    // 自分自身は削除不可
+    if (callerUid === targetUserId) {
+      throw new HttpsError('failed-precondition', '自分自身は削除できません');
+    }
+
+    try {
+      // 呼び出し元がadminか確認
+      const callerDoc = await db
+        .collection('companies')
+        .doc(companyId)
+        .collection('users')
+        .doc(callerUid)
+        .get();
+
+      if (!callerDoc.exists || callerDoc.data().role !== 'admin') {
+        throw new HttpsError('permission-denied', '管理者権限が必要です');
+      }
+
+      // 対象ユーザーが同じ企業に属しているか確認
+      const targetUserDoc = await db
+        .collection('companies')
+        .doc(companyId)
+        .collection('users')
+        .doc(targetUserId)
+        .get();
+
+      if (!targetUserDoc.exists) {
+        throw new HttpsError('not-found', 'ユーザーが見つかりません');
+      }
+
+      // Firebase Authからユーザーを削除
+      const auth = getAuth();
+      await auth.deleteUser(targetUserId);
+
+      // Firestoreからユーザードキュメントを削除
+      await db
+        .collection('companies')
+        .doc(companyId)
+        .collection('users')
+        .doc(targetUserId)
+        .delete();
+
+      console.log(`ユーザー ${targetUserId} を削除しました (by ${callerUid})`);
+
+      return { success: true, message: 'ユーザーを削除しました' };
+    } catch (error) {
+      console.error('ユーザー削除エラー:', error);
+
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+
+      throw new HttpsError('internal', 'ユーザーの削除に失敗しました');
     }
   }
 );
