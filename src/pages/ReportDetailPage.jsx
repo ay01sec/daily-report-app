@@ -63,6 +63,18 @@ export default function ReportDetailPage() {
           )}
         </div>
 
+        {report.status === 'rejected' && report.rejection?.reason && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+            <h3 className="font-medium text-red-800">差戻し理由</h3>
+            <p className="text-sm text-red-700 mt-1">{report.rejection.reason}</p>
+            {report.rejection.rejectedByName && (
+              <p className="text-xs text-red-500 mt-1">
+                差戻し者: {report.rejection.rejectedByName}
+              </p>
+            )}
+          </div>
+        )}
+
         {report.clientSignature?.imageUrl && (
           <SignatureDisplay
             imageUrl={report.clientSignature.imageUrl}
@@ -76,6 +88,14 @@ export default function ReportDetailPage() {
             <span className="text-xs text-gray-500">実施日</span>
             <p className="font-medium">{formatDate(report.reportDate)}</p>
           </div>
+          {report.weather && (
+            <div>
+              <span className="text-xs text-gray-500">天候</span>
+              <p className="font-medium">
+                {{ sunny: '☀️ 晴れ', cloudy: '☁️ 曇り', rainy: '🌧️ 雨', snowy: '❄️ 雪' }[report.weather] || report.weather}
+              </p>
+            </div>
+          )}
           <div>
             <span className="text-xs text-gray-500">現場名</span>
             <p className="font-medium">{report.siteName}</p>
@@ -113,6 +133,29 @@ export default function ReportDetailPage() {
           <div className="bg-white rounded-xl shadow-sm p-4">
             <h3 className="font-medium text-gray-900 mb-2">連絡事項</h3>
             <p className="text-gray-700 whitespace-pre-wrap">{report.notes}</p>
+          </div>
+        )}
+
+        {report.photos?.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <h3 className="font-medium text-gray-900 mb-2">写真</h3>
+            <div className="grid grid-cols-3 gap-2">
+              {report.photos.map((photo, index) => (
+                <a
+                  key={index}
+                  href={photo.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="aspect-square rounded-lg overflow-hidden bg-gray-100"
+                >
+                  <img
+                    src={photo.url}
+                    alt={`写真 ${index + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                </a>
+              ))}
+            </div>
           </div>
         )}
 

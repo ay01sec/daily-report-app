@@ -6,6 +6,7 @@ const { getFirestore, Timestamp, FieldValue } = require('firebase-admin/firestor
 const { getMessaging } = require('firebase-admin/messaging');
 const { getAuth } = require('firebase-admin/auth');
 const PDFDocument = require('pdfkit');
+const archiver = require('archiver');
 const path = require('path');
 const sgMail = require('@sendgrid/mail');
 const { defineSecret } = require('firebase-functions/params');
@@ -592,11 +593,17 @@ function generateReportPdf(reportData, companyData, signatureImageBuffer) {
     doc.text('作成者', col3 + 4, row2Top + 6);
     doc.text(reportData.createdByName || '', col4 + 4, row2Top + 6);
 
-    // === 現場名 ===
+    // === 現場名 + 天候 ===
     const siteTop = row2Top + row2H + 10;
+    const weatherMap = { sunny: '晴れ', cloudy: '曇り', rainy: '雨', snowy: '雪' };
+    const weatherStr = weatherMap[reportData.weather] || '';
     doc.fontSize(11);
     doc.text('現場名', LEFT, siteTop, { continued: true });
     doc.text(`     ${reportData.siteName || ''}`);
+    if (weatherStr) {
+      doc.fontSize(10);
+      doc.text(`天候：${weatherStr}`, LEFT, doc.y + 2);
+    }
     doc.moveDown(0.5);
 
     // === 作業員テーブル ===
@@ -788,6 +795,92 @@ exports.onAutoApproveReport = onDocumentUpdated(
       } catch (error) {
         console.error('承認メール送信エラー:', error);
       }
+    }
+  }
+);
+
+/**
+ * PDF一括ダウンロード（callable function）
+ */
+exports.generateBulkPdf = onCall(
+  {
+    region: 'asia-northeast1',
+    timeoutSeconds: 300,
+    memory: '1GiB',
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', '認証が必要です');
+    }
+
+    const { companyId, startDate, endDate } = request.data;
+    if (!companyId || !startDate || !endDate) {
+      throw new HttpsError('invalid-argument', 'companyId, startDate, endDateは必須です');
+    }
+
+    try {
+      // 企業情報取得
+      const companyDoc = await db.collection('companies').doc(companyId).get();
+      const companyData = companyDoc.data();
+
+      // 期間内の承認済み日報を取得
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+
+      const reportsSnap = await db.collection('companies').doc(companyId)
+        .collection('dailyReports').get();
+
+      const reports = reportsSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(r => {
+          if (r.status !== 'approved' && r.status !== 'submitted') return false;
+          if (!r.reportDate) return false;
+          const rd = r.reportDate.toDate ? r.reportDate.toDate() : new Date(r.reportDate);
+          return rd >= start && rd <= end;
+        })
+        .sort((a, b) => {
+          const da = a.reportDate?.toDate ? a.reportDate.toDate() : new Date(a.reportDate);
+          const db2 = b.reportDate?.toDate ? b.reportDate.toDate() : new Date(b.reportDate);
+          return da - db2;
+        });
+
+      if (reports.length === 0) {
+        return { zipBase64: null, count: 0 };
+      }
+
+      // ZIP生成
+      const zipBuffer = await new Promise((resolve, reject) => {
+        const buffers = [];
+        const archive = archiver('zip', { zlib: { level: 5 } });
+        archive.on('data', chunk => buffers.push(chunk));
+        archive.on('end', () => resolve(Buffer.concat(buffers)));
+        archive.on('error', reject);
+
+        const pdfPromises = reports.map(async (report) => {
+          const signatureImageBuffer = await downloadSignatureImage(report.clientSignature?.imageUrl);
+          const pdfBuffer = await generateReportPdf(report, companyData, signatureImageBuffer);
+
+          const rd = report.reportDate?.toDate ? report.reportDate.toDate() : new Date(report.reportDate);
+          const dateStr = `${rd.getFullYear()}${String(rd.getMonth() + 1).padStart(2, '0')}${String(rd.getDate()).padStart(2, '0')}`;
+          const fileName = `${dateStr}_${report.siteName || '不明'}_${report.createdByName || ''}.pdf`;
+
+          archive.append(pdfBuffer, { name: fileName });
+        });
+
+        Promise.all(pdfPromises)
+          .then(() => archive.finalize())
+          .catch(reject);
+      });
+
+      return {
+        zipBase64: zipBuffer.toString('base64'),
+        count: reports.length,
+      };
+    } catch (error) {
+      console.error('PDF一括生成エラー:', error);
+      throw new HttpsError('internal', 'PDF一括生成に失敗しました');
     }
   }
 );

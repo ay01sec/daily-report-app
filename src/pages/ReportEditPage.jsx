@@ -135,6 +135,18 @@ export default function ReportEditPage() {
           </button>
         </div>
 
+        {report.status === 'rejected' && report.rejection?.reason && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+            <h3 className="font-medium text-red-800">差戻し理由</h3>
+            <p className="text-sm text-red-700 mt-1">{report.rejection.reason}</p>
+            {report.rejection.rejectedByName && (
+              <p className="text-xs text-red-500 mt-1">
+                差戻し者: {report.rejection.rejectedByName}
+              </p>
+            )}
+          </div>
+        )}
+
         {isSigned && report.clientSignature?.imageUrl && (
           <div className="mb-6">
             <SignatureDisplay

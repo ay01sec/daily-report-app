@@ -24,7 +24,21 @@ export function useSites() {
             id: doc.id,
             ...doc.data(),
           }))
-          .filter((site) => site.status === 'active')
+          .filter((site) => {
+            if (site.status !== 'active') return false;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (site.startDate) {
+              const start = site.startDate.toDate ? site.startDate.toDate() : new Date(site.startDate);
+              if (start > today) return false;
+            }
+            if (site.endDate) {
+              const end = site.endDate.toDate ? site.endDate.toDate() : new Date(site.endDate);
+              end.setHours(23, 59, 59, 999);
+              if (end < today) return false;
+            }
+            return true;
+          })
           .sort((a, b) => (a.siteName || '').localeCompare(b.siteName || ''));
 
         setSites(data);

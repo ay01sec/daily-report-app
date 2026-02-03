@@ -11,8 +11,57 @@ import PullToRefresh from '../components/common/PullToRefresh';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
+function getEncouragementMessage() {
+  const hour = new Date().getHours();
+  if (hour < 10) return '今日も一日頑張りましょう！';
+  if (hour < 12) return '午前の作業お疲れ様です！';
+  if (hour < 14) return 'お昼休憩はとれましたか？';
+  if (hour < 16) return '午後も引き続き頑張りましょう！';
+  return 'お疲れ様です。日報の提出をお忘れなく！';
+}
+
+function SubmissionStatusBanner({ reports, companyInfo }) {
+  const now = new Date();
+  const todayStr = format(now, 'yyyy-MM-dd');
+
+  // 今日の日報を探す
+  const todayReport = reports.find((r) => {
+    if (!r.reportDate) return false;
+    const d = r.reportDate.toDate ? r.reportDate.toDate() : new Date(r.reportDate);
+    return format(d, 'yyyy-MM-dd') === todayStr;
+  });
+
+  const isSubmitted = todayReport && (todayReport.status === 'submitted' || todayReport.status === 'approved');
+  const deadline = companyInfo?.reportDeadline || '18:00';
+  const [deadlineH, deadlineM] = deadline.split(':').map(Number);
+  const isPastDeadline = now.getHours() > deadlineH || (now.getHours() === deadlineH && now.getMinutes() >= deadlineM);
+
+  if (isSubmitted) {
+    return (
+      <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+        <p className="font-medium text-green-800">本日の日報は提出済みです</p>
+      </div>
+    );
+  }
+
+  if (isPastDeadline) {
+    return (
+      <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-4">
+        <p className="font-medium text-orange-800">提出期限を過ぎています</p>
+        <p className="text-sm text-orange-700 mt-1">本日の日報がまだ提出されていません</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+      <p className="font-medium text-blue-800">{getEncouragementMessage()}</p>
+    </div>
+  );
+}
+
 export default function HomePage() {
-  const { currentUser, companyId } = useAuth();
+  const { currentUser, companyId, companyInfo } = useAuth();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -94,6 +143,10 @@ export default function HomePage() {
 
         <main className="px-4 py-6 max-w-lg mx-auto">
           <NotificationPrompt />
+
+        {!loading && (
+          <SubmissionStatusBanner reports={reports} companyInfo={companyInfo} />
+        )}
 
         {rejectedReports.length > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
