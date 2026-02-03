@@ -35,13 +35,19 @@ export default function WorkerRow({
         <select
           value={worker.employeeId || ''}
           onChange={(e) => {
-            const emp = employees.find((em) => em.id === e.target.value);
-            handleChange('employeeId', e.target.value);
-            if (emp) {
+            const val = e.target.value;
+            if (val === '__other__') {
               onChange(index, {
                 ...worker,
-                employeeId: e.target.value,
-                name: emp.fullName,
+                employeeId: '__other__',
+                name: '',
+              });
+            } else {
+              const emp = employees.find((em) => em.id === val);
+              onChange(index, {
+                ...worker,
+                employeeId: val,
+                name: emp ? emp.fullName : '',
               });
             }
           }}
@@ -55,11 +61,30 @@ export default function WorkerRow({
               {emp.fullName}
             </option>
           ))}
+          <option value="__other__">その他</option>
         </select>
         {errors?.employeeId && (
           <p className="text-red-500 text-xs mt-1">{errors.employeeId}</p>
         )}
       </div>
+
+      {worker.employeeId === '__other__' && (
+        <div>
+          <label className="block text-xs text-gray-600 mb-1">氏名（自由入力）</label>
+          <input
+            type="text"
+            value={worker.name || ''}
+            onChange={(e) => handleChange('name', e.target.value)}
+            placeholder="氏名を入力"
+            className={`w-full border rounded-lg px-3 py-2 text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+              errors?.name ? 'border-red-500' : 'border-gray-300'
+            }`}
+          />
+          {errors?.name && (
+            <p className="text-red-500 text-xs mt-1">{errors.name}</p>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div>

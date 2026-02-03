@@ -17,6 +17,8 @@ export function validateReport(data) {
       const err = {};
       if (!worker.employeeId) {
         err.employeeId = '氏名を選択してください';
+      } else if (worker.employeeId === '__other__' && !worker.name?.trim()) {
+        err.name = '氏名を入力してください';
       }
       if (!worker.startTime) {
         err.startTime = '開始時間を入力してください';
@@ -44,6 +46,8 @@ export function validateWorker(worker) {
 
   if (!worker.employeeId) {
     errors.employeeId = '氏名を選択してください';
+  } else if (worker.employeeId === '__other__' && !worker.name?.trim()) {
+    errors.name = '氏名を入力してください';
   }
   if (!worker.startTime) {
     errors.startTime = '開始時間を入力してください';
