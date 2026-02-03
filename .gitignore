@@ -3,6 +3,9 @@
 .env.local
 .env.*.local
 
+# Firebase Extensions secrets
+extensions/*.env
+
 # Logs
 logs
 *.log
