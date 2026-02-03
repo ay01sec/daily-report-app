@@ -97,18 +97,26 @@ export default function ReportForm({
     const matched = employees.find(
       (emp) => emp.contact?.email && emp.contact.email === currentUser.email
     );
-    if (matched) {
-      setFormData((prev) => {
-        const newWorkers = [...prev.workers];
+
+    setFormData((prev) => {
+      const newWorkers = [...prev.workers];
+      if (matched) {
         newWorkers[0] = {
           ...newWorkers[0],
           employeeId: matched.id,
           name: matched.fullName,
         };
-        return { ...prev, workers: newWorkers };
-      });
-    }
-  }, [initialData, reportId, currentUser, employees, formData.workers]);
+      } else {
+        // マッチしなくてもログインユーザーの氏名を固定セット
+        newWorkers[0] = {
+          ...newWorkers[0],
+          employeeId: '__self__',
+          name: userInfo?.displayName || currentUser.email || '',
+        };
+      }
+      return { ...prev, workers: newWorkers };
+    });
+  }, [initialData, reportId, currentUser, userInfo, employees, formData.workers]);
 
   useEffect(() => {
     if (!reportId && !initialData) {

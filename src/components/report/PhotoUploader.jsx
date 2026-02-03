@@ -91,7 +91,6 @@ export default function PhotoUploader({ reportId, photos = [], onChange, disable
             ref={fileInputRef}
             type="file"
             accept="image/*"
-            capture="environment"
             multiple
             onChange={handleFileSelect}
             className="hidden"

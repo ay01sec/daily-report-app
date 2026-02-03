@@ -33,38 +33,43 @@ export default function WorkerRow({
 
       <div>
         <label className="block text-xs text-gray-600 mb-1">氏名</label>
-        <select
-          value={worker.employeeId || ''}
-          disabled={isNameLocked}
-          onChange={(e) => {
-            const val = e.target.value;
-            if (val === '__other__') {
-              onChange(index, {
-                ...worker,
-                employeeId: '__other__',
-                name: '',
-              });
-            } else {
-              const emp = employees.find((em) => em.id === val);
-              onChange(index, {
-                ...worker,
-                employeeId: val,
-                name: emp ? emp.fullName : '',
-              });
-            }
-          }}
-          className={`w-full border rounded-lg px-3 py-2 text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-            errors?.employeeId ? 'border-red-500' : 'border-gray-300'
-          } ${isNameLocked ? 'bg-gray-100' : ''}`}
-        >
-          <option value="">選択してください</option>
-          {employees.map((emp) => (
-            <option key={emp.id} value={emp.id}>
-              {emp.fullName}
-            </option>
-          ))}
-          <option value="__other__">その他</option>
-        </select>
+        {isNameLocked ? (
+          <div className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base bg-gray-100 text-gray-700">
+            {worker.name || 'ログインユーザー'}
+          </div>
+        ) : (
+          <select
+            value={worker.employeeId || ''}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === '__other__') {
+                onChange(index, {
+                  ...worker,
+                  employeeId: '__other__',
+                  name: '',
+                });
+              } else {
+                const emp = employees.find((em) => em.id === val);
+                onChange(index, {
+                  ...worker,
+                  employeeId: val,
+                  name: emp ? emp.fullName : '',
+                });
+              }
+            }}
+            className={`w-full border rounded-lg px-3 py-2 text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+              errors?.employeeId ? 'border-red-500' : 'border-gray-300'
+            }`}
+          >
+            <option value="">選択してください</option>
+            {employees.map((emp) => (
+              <option key={emp.id} value={emp.id}>
+                {emp.fullName}
+              </option>
+            ))}
+            <option value="__other__">その他</option>
+          </select>
+        )}
         {errors?.employeeId && (
           <p className="text-red-500 text-xs mt-1">{errors.employeeId}</p>
         )}
