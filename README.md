@@ -1,16 +1,323 @@
-# React + Vite
+# 作業日報アプリ（現場作業員向け）
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+建設業向けの作業日報を作成・署名・提出するためのモバイルPWAアプリです。現場作業員や職長がスマートフォンから日報を入力し、得意先の署名を取得して管理者に送信できます。
 
-Currently, two official plugins are available:
+## 技術スタック
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+| 項目 | 技術 |
+|------|------|
+| フレームワーク | React 19.2 + React Router 7 |
+| ビルドツール | Vite 7.2 |
+| CSS | Tailwind CSS 4.1 |
+| データベース | Cloud Firestore |
+| 認証 | Firebase Authentication |
+| ストレージ | Firebase Storage |
+| ホスティング | Vercel |
+| 署名 | react-signature-canvas |
+| PWA | vite-plugin-pwa + Workbox |
+| プッシュ通知 | Firebase Cloud Messaging |
 
-## React Compiler
+## セットアップ
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+# 依存関係のインストール
+npm install
 
-## Expanding the ESLint configuration
+# 開発サーバー起動
+npm run dev
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+# ビルド
+npm run build
+```
+
+## 環境変数
+
+`.env.local` ファイルに以下のFirebase設定を記載してください。
+
+```
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+VITE_FIREBASE_VAPID_KEY=
+```
+
+---
+
+## ユーザーロールと権限
+
+| ロール | アプリでの操作 |
+|--------|--------------|
+| admin（管理者） | 日報の作成・編集・提出・閲覧 |
+| manager（マネージャー） | 日報の作成・編集・提出・閲覧 |
+| worker（ワーカー） | 自分の日報の作成・編集・提出・閲覧 |
+
+全ロールのユーザーが日報アプリを利用できます。
+
+---
+
+## ログイン
+
+1. **企業コード**（8桁の数字）を入力
+2. **メールアドレス**と**パスワード**を入力してログイン
+3. 前回入力した企業コードは自動保存されます
+4. パスワードを忘れた場合は「パスワードを忘れた方」からリセットメールを送信
+
+---
+
+## 機能一覧
+
+### ホーム画面（`/`）
+
+ログイン後のメインページです。自分の日報一覧を確認できます。
+
+- **月選択**: ドロップダウンで表示月を切り替え
+- **提出状況バナー**: 今日の日報提出状況に応じたメッセージを表示
+- **遅延アラート**: 締切時刻を過ぎて未提出の場合に警告を表示
+- **却下アラート**: 却下された日報がある場合にその件数を表示
+- **日報一覧**: カード形式で日付・現場名・ステータスを表示
+- **プルリフレッシュ**: 画面を下に引っ張ってデータを更新
+- **新規作成ボタン**: 「日報を作成」ボタンから新規日報の作成画面へ
+
+**カードタップ時の遷移先:**
+| 日報ステータス | 遷移先 |
+|--------------|--------|
+| 下書き / 却下 / 署名済み | 編集画面（`/reports/:id/edit`） |
+| 提出済み / 承認済み | 閲覧画面（`/reports/:id`） |
+
+---
+
+### 日報の作成（`/reports/new`）
+
+新しい日報を作成します。
+
+**入力項目:**
+
+| 項目 | 必須 | 説明 |
+|------|------|------|
+| 作業日 | 必須 | 日付選択（デフォルト: 当日） |
+| 天候 | 任意 | 晴れ / 曇り / 雨 / 雪から選択 |
+| 現場名 | 必須 | 稼働中の現場からドロップダウンで選択 |
+| 作業員 | 必須（1名以上） | 作業員ごとに以下を入力 |
+| - 氏名 | 必須 | 社員リストから選択 または 手入力（その他） |
+| - 開始時刻 | 必須 | 30分間隔で選択（00:00〜23:30） |
+| - 終了時刻 | 必須 | 30分間隔で選択 |
+| - 昼休憩なし | 任意 | チェックで昼休憩を取らなかったことを記録 |
+| - 作業内容 | 任意 | テキスト入力 |
+| 連絡事項 | 任意 | 自由記述テキスト |
+| 写真 | 任意 | 最大3枚まで添付可能 |
+
+**最初の作業員行にはログインユーザーが自動設定されます。**
+
+**保存オプション:**
+- **あとで保存**: 下書きとしてFirestoreに保存（後で編集可能）
+- **署名に進む**: 保存後に署名画面を表示
+
+---
+
+### 得意先署名
+
+日報作成後、得意先の署名を取得する画面が表示されます。
+
+1. 署名パッドが全画面表示される
+2. 得意先担当者にスマートフォンを渡して署名してもらう
+3. 「クリア」で書き直し、「署名完了」で確定
+4. 署名画像はFirebase Storageにアップロードされる
+5. 署名完了後、日報のステータスが「署名済み」に変更
+
+---
+
+### 日報の編集（`/reports/:id/edit`）
+
+下書き・署名済み・却下の日報を編集できます。
+
+- 全ての入力項目を修正可能
+- **署名やり直し**: 署名済みの場合、「署名やり直し」ボタンで署名を削除して下書きに戻す
+- **却下理由の表示**: 却下された日報の場合、却下理由が赤枠で表示される
+- **提出ボタン**: 署名済みの日報を管理者に提出（確認ダイアログ付き）
+
+---
+
+### 日報の提出
+
+署名完了後、日報を管理者に送信します。
+
+1. 編集画面で「提出する」ボタンをタップ
+2. 確認ダイアログで「提出する」を選択
+3. ステータスが「提出済み」に変更、提出日時が記録
+4. ホーム画面にリダイレクト
+
+---
+
+### 日報の閲覧（`/reports/:id`）
+
+提出済み・承認済みの日報を閲覧します（編集不可）。
+
+- 日報の全情報を表示
+- 天候アイコン・テキスト
+- 作業員一覧（氏名・時間・昼休憩・作業内容）
+- 連絡事項
+- 添付写真（タップで拡大表示）
+- 得意先署名画像
+- 承認情報（承認者・承認日時）
+- 却下理由（却下の場合）
+
+---
+
+### 写真添付機能
+
+日報に現場写真を添付できます。
+
+- 最大3枚まで添付可能
+- スマートフォンのカメラまたは写真ライブラリから選択
+- プレビュー表示（3列グリッド）
+- 個別に削除可能（x ボタン）
+- Firebase Storageにアップロード・保存
+
+---
+
+## 日報のステータス遷移
+
+```
+下書き ──→ 署名済み ──→ 提出済み ──→ 承認済み
+                                  └──→ 却下 ──→ 再編集 ──→ 署名済み ──→ ...
+```
+
+| ステータス | 色 | 説明 |
+|-----------|-----|------|
+| 下書き | グレー | 保存済み、未署名 |
+| 署名済み | 黄色 | 得意先署名取得済み、未提出 |
+| 提出済み | 青 | 管理者に送信済み、承認待ち |
+| 承認済み | 緑 | 管理者が承認済み |
+| 却下 | 赤 | 管理者が却下、修正が必要 |
+
+---
+
+## オフライン対応
+
+インターネット接続がない環境でも限定的に利用できます。
+
+- **下書き自動保存**: 入力中のフォームデータを1秒間隔でlocalStorageに自動保存
+- **オフライン保存**: オフライン時はFirestoreへの送信の代わりにlocalStorageに保存
+- **同期キュー**: 未同期の日報を自動でキューに登録
+- **自動同期**: オンラインに復帰した際、キューの日報を自動でFirestoreに送信
+
+**ステータス表示:**
+| 状態 | 表示 |
+|------|------|
+| オンライン（同期済み） | 表示なし |
+| オンライン（未同期あり） | 黄色バー「N件の未同期下書き」 |
+| オフライン | 赤バー「オフラインモード」 |
+| 同期中 | 「同期中...」 |
+
+---
+
+## プッシュ通知
+
+Firebase Cloud Messaging（FCM）を利用したプッシュ通知に対応しています。
+
+- 初回アクセス時に通知許可のプロンプトを表示
+- 許可された場合、FCMトークンをFirestoreのユーザードキュメントに保存
+- 日報の承認・却下時にプッシュ通知を受信
+
+---
+
+## PWA（Progressive Web App）
+
+ホーム画面に追加してネイティブアプリのように利用できます。
+
+- **インストール**: ブラウザの「ホーム画面に追加」から追加
+- **オフラインキャッシュ**: 静的アセットをService Workerでキャッシュ
+- **バックグラウンド同期**: Service Workerによるバックグラウンド通知受信
+- **スタンドアロンモード**: ブラウザUIなしで全画面表示
+
+---
+
+## Firestoreデータ構造（日報関連）
+
+```
+companies/{companyId}
+│
+├── users/{userId}
+│   ├── email, displayName, role, isActive
+│   ├── lastLoginAt, fcmToken, fcmTokenUpdatedAt
+│
+├── employees/{employeeId}
+│   ├── firstName, lastName, isActive
+│
+├── sites/{siteId}
+│   ├── siteName, status, startDate, endDate
+│
+└── dailyReports/{reportId}
+    ├── reportDate          # 作業日
+    ├── weather             # 天候（sunny/cloudy/rainy/snowy）
+    ├── siteId, siteName    # 現場
+    ├── createdBy           # 作成者UID
+    ├── createdByName       # 作成者名
+    ├── status              # ステータス
+    ├── workers[]           # 作業員リスト
+    │   ├── name            # 氏名
+    │   ├── employeeId      # 社員ID
+    │   ├── startTime       # 開始時刻（HH:MM）
+    │   ├── endTime         # 終了時刻（HH:MM）
+    │   ├── noLunchBreak    # 昼休憩なしフラグ
+    │   └── remarks         # 作業内容
+    ├── notes               # 連絡事項
+    ├── photos[]            # 添付写真
+    │   ├── url             # ダウンロードURL
+    │   ├── path            # Storageパス
+    │   └── name            # ファイル名
+    ├── clientSignature     # 得意先署名
+    │   ├── imageUrl        # 署名画像URL
+    │   └── signedAt        # 署名日時
+    ├── submittedAt         # 提出日時
+    └── approval            # 承認情報
+        ├── approvedBy      # 承認者UID
+        ├── approvedByName  # 承認者名
+        ├── approvedAt      # 承認日時
+        └── rejectionReason # 却下理由
+```
+
+---
+
+## Firebaseセキュリティルール
+
+| コレクション | 読み取り | 書き込み | 削除 |
+|------------|---------|---------|------|
+| companies | 認証不要（企業コード検証用） | 管理者のみ | - |
+| users | 認証済みユーザー | 本人または管理者 | - |
+| employees / sites / clients | 認証済みユーザー | 管理者のみ | 管理者のみ |
+| dailyReports | 作成者または管理者/マネージャー | 作成者（下書き/署名済み/却下のみ）または管理者 | 管理者のみ |
+
+**Firebase Storageルール:**
+- 署名画像: 最大5MB、画像形式のみ
+- 写真: 最大10MB、画像形式のみ
+
+---
+
+## 日報運用フロー
+
+```
+【現場作業員】                    【管理者（管理画面）】
+   │                                    │
+   ├─ 日報作成（作業日・現場・作業員）      │
+   ├─ 写真添付（任意）                    │
+   ├─ 得意先に署名してもらう               │
+   ├─ 日報を提出 ──────────────→ 提出通知を受信
+   │                                    ├─ 日報を確認
+   │                            ┌───── ├─ 承認 or 却下
+   │  承認通知を受信 ←──────────┘       │
+   │  or                                │
+   │  却下通知を受信 ←──────────────────┘
+   ├─ 却下理由を確認                      │
+   ├─ 日報を修正・再提出 ────────→ 再度確認
+   │                                    │
+```
+
+---
+
+## 関連プロジェクト
+
+- **労務管理システム（管理画面）**: [labor-admin](https://github.com/ay01sec/labor-admin) - 社員管理・日報承認・勤怠集計を行う管理者向けWebアプリ
