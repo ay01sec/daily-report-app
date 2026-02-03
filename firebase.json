@@ -1,7 +1,5 @@
 {
-  "extensions": {
-    "firestore-send-email": "firebase/firestore-send-email@0.2.4"
-  },
+  "extensions": {},
   "functions": {
     "source": "functions",
     "runtime": "nodejs20",
