@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import OnlineStatus from './OnlineStatus';
 
@@ -21,12 +22,18 @@ export default function Header() {
                 <p className="text-blue-100 text-xs mt-0.5">{companyInfo.companyName}</p>
               )}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {userInfo && (
-                <span className="text-sm text-blue-100">
+                <span className="text-sm text-blue-100 hidden sm:inline">
                   {userInfo.displayName || userInfo.email}
                 </span>
               )}
+              <Link
+                to="/help"
+                className="text-sm bg-blue-500 hover:bg-blue-400 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                ヘルプ
+              </Link>
               <button
                 onClick={handleLogout}
                 className="text-sm bg-blue-500 hover:bg-blue-400 px-3 py-1.5 rounded-lg transition-colors"
