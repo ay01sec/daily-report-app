@@ -50,9 +50,9 @@ export default function HomePage() {
           return reportDate >= startDate && reportDate <= endDate;
         })
         .sort((a, b) => {
-          const dateA = a.reportDate?.toDate ? a.reportDate.toDate() : new Date(a.reportDate);
-          const dateB = b.reportDate?.toDate ? b.reportDate.toDate() : new Date(b.reportDate);
-          return dateB - dateA; // 降順
+          const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+          const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+          return dateB - dateA; // 作成日の降順
         });
 
       setReports(data);

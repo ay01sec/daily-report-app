@@ -1,4 +1,4 @@
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
 export function formatDate(date, formatStr = 'yyyy年M月d日') {
@@ -27,7 +27,9 @@ export function toDateInputValue(date) {
 
 export function fromDateInputValue(value) {
   if (!value) return null;
-  return parseISO(value);
+  const [year, month, day] = value.split('-').map(Number);
+  // 正午に設定してタイムゾーンによる日付ずれを防止
+  return new Date(year, month - 1, day, 12, 0, 0);
 }
 
 export function getTodayString() {
