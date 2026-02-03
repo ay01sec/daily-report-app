@@ -703,56 +703,79 @@ exports.onAutoApproveReport = onDocumentUpdated(
     const beforeData = event.data.before.data();
     const afterData = event.data.after.data();
 
-    // ステータスがsubmittedに変更された場合のみ処理
-    if (beforeData.status === afterData.status || afterData.status !== 'submitted') {
+    // ステータスが変更されていない場合はスキップ
+    if (beforeData.status === afterData.status) {
       return;
     }
 
     const companyId = event.params.companyId;
     const reportId = event.params.reportId;
 
-    try {
-      // 1. 承認設定を取得（現場設定 > 企業設定のフォールバック）
-      const approvalConfig = await resolveApprovalSettings(companyId, afterData.siteId);
+    // === Case 1: submitted → 自動承認モードならapprovedに変更 ===
+    if (afterData.status === 'submitted') {
+      try {
+        const approvalConfig = await resolveApprovalSettings(companyId, afterData.siteId);
 
-      if (approvalConfig.mode !== 'auto') {
-        console.log(`手動承認モード: ${companyId}/${reportId}`);
-        return;
+        if (approvalConfig.mode !== 'auto') {
+          console.log(`手動承認モード: ${companyId}/${reportId}`);
+          return;
+        }
+
+        console.log(`自動承認開始: ${companyId}/${reportId}`);
+
+        const reportRef = db.collection('companies').doc(companyId)
+          .collection('dailyReports').doc(reportId);
+        await reportRef.update({
+          status: 'approved',
+          'approval.approvedBy': 'system',
+          'approval.approvedByName': '自動承認',
+          'approval.approvedAt': Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+
+        console.log(`自動承認完了: ${companyId}/${reportId}`);
+        // メール送信はCase 2（approved検知時）で行う
+      } catch (error) {
+        console.error('自動承認エラー:', error);
       }
+      return;
+    }
 
-      console.log(`自動承認開始: ${companyId}/${reportId}`);
+    // === Case 2: approved → PDF生成 + メール送信（自動・手動共通） ===
+    if (afterData.status === 'approved') {
+      try {
+        console.log(`承認メール送信開始: ${companyId}/${reportId}`);
 
-      // 2. ステータスをapprovedに更新
-      const reportRef = db.collection('companies').doc(companyId)
-        .collection('dailyReports').doc(reportId);
-      await reportRef.update({
-        status: 'approved',
-        'approval.approvedBy': 'system',
-        'approval.approvedByName': '自動承認',
-        'approval.approvedAt': Timestamp.now(),
-        updatedAt: Timestamp.now(),
-      });
+        // 承認設定からメール送信先を取得
+        const approvalConfig = await resolveApprovalSettings(companyId, afterData.siteId);
+        const emails = approvalConfig.emails.filter(e => e && e.trim());
 
-      // 3. サイン画像ダウンロード + PDF生成
-      const companyDoc = await db.collection('companies').doc(companyId).get();
-      const companyData = companyDoc.data();
-      const signatureImageBuffer = await downloadSignatureImage(afterData.clientSignature?.imageUrl);
-      const pdfBuffer = await generateReportPdf(afterData, companyData, signatureImageBuffer);
+        if (emails.length === 0) {
+          console.log(`メール送信先なし: ${companyId}/${reportId}`);
+          return;
+        }
 
-      // 4. SendGrid APIでメール送信
-      const emails = approvalConfig.emails.filter(e => e && e.trim());
-      if (emails.length > 0) {
+        // サイン画像ダウンロード + PDF生成
+        const companyDoc = await db.collection('companies').doc(companyId).get();
+        const companyData = companyDoc.data();
+        const signatureImageBuffer = await downloadSignatureImage(afterData.clientSignature?.imageUrl);
+        const pdfBuffer = await generateReportPdf(afterData, companyData, signatureImageBuffer);
+
+        // SendGrid APIでメール送信
         const reportDate = afterData.reportDate?.toDate
           ? afterData.reportDate.toDate()
           : new Date(afterData.reportDate);
         const dateStr = `${reportDate.getFullYear()}年${reportDate.getMonth() + 1}月${reportDate.getDate()}日`;
+
+        const isAutoApproved = afterData.approval?.approvedBy === 'system';
+        const approvalType = isAutoApproved ? '自動承認' : '承認';
 
         sgMail.setApiKey(sendgridApiKey.value());
         await sgMail.send({
           to: emails,
           from: 'labor-management-info@improve-biz.com',
           subject: `【日報】${afterData.siteName || ''} - ${dateStr}`,
-          text: `${companyData?.companyName || ''}の日報が自動承認されました。\n\n現場: ${afterData.siteName || ''}\n実施日: ${dateStr}\n作成者: ${afterData.createdByName || ''}\n\nPDFを添付しています。`,
+          text: `${companyData?.companyName || ''}の日報が${approvalType}されました。\n\n現場: ${afterData.siteName || ''}\n実施日: ${dateStr}\n作成者: ${afterData.createdByName || ''}\n\nPDFを添付しています。`,
           attachments: [{
             filename: `日報_${afterData.siteName || ''}_${dateStr}.pdf`,
             content: pdfBuffer.toString('base64'),
@@ -761,12 +784,10 @@ exports.onAutoApproveReport = onDocumentUpdated(
           }],
         });
 
-        console.log(`自動承認メール送信: ${emails.join(', ')}`);
+        console.log(`承認メール送信完了: ${emails.join(', ')} (${approvalType})`);
+      } catch (error) {
+        console.error('承認メール送信エラー:', error);
       }
-
-      console.log(`自動承認完了: ${companyId}/${reportId}`);
-    } catch (error) {
-      console.error('自動承認エラー:', error);
     }
   }
 );
