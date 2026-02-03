@@ -5,6 +5,8 @@ const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, Timestamp, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 const { getAuth } = require('firebase-admin/auth');
+const PDFDocument = require('pdfkit');
+const path = require('path');
 
 initializeApp();
 
@@ -453,6 +455,208 @@ exports.deleteUser = onCall(
       }
 
       throw new HttpsError('internal', 'ユーザーの削除に失敗しました');
+    }
+  }
+);
+
+/**
+ * 承認設定を解決（現場設定 > 企業設定のフォールバック）
+ */
+async function resolveApprovalSettings(companyId, siteId) {
+  // 企業設定を取得
+  const companyDoc = await db.collection('companies').doc(companyId).get();
+  const companyData = companyDoc.data();
+  const companySettings = companyData?.approvalSettings || { mode: 'manual', autoApprovalEmails: [] };
+
+  if (!siteId) {
+    return { mode: companySettings.mode, emails: companySettings.autoApprovalEmails || [] };
+  }
+
+  // 現場設定を取得
+  const siteDoc = await db.collection('companies').doc(companyId)
+    .collection('sites').doc(siteId).get();
+  const siteSettings = siteDoc.data()?.approvalSettings;
+
+  if (!siteSettings || siteSettings.mode === 'default') {
+    return { mode: companySettings.mode, emails: companySettings.autoApprovalEmails || [] };
+  }
+
+  // 現場設定がautoで、メールが空なら企業設定のメールを使用
+  const emails = (siteSettings.autoApprovalEmails?.length > 0)
+    ? siteSettings.autoApprovalEmails
+    : companySettings.autoApprovalEmails || [];
+
+  return { mode: siteSettings.mode, emails };
+}
+
+/**
+ * 日報PDFを生成
+ */
+function generateReportPdf(reportData, companyData) {
+  return new Promise((resolve, reject) => {
+    const fontPath = path.join(__dirname, 'NotoSansJP-Regular.ttf');
+
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const buffers = [];
+
+    doc.on('data', (chunk) => buffers.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(buffers)));
+    doc.on('error', reject);
+
+    // 日本語フォント登録
+    doc.registerFont('NotoSansJP', fontPath);
+    doc.font('NotoSansJP');
+
+    const reportDate = reportData.reportDate?.toDate
+      ? reportData.reportDate.toDate()
+      : new Date(reportData.reportDate);
+    const dateStr = `${reportDate.getFullYear()}年${reportDate.getMonth() + 1}月${reportDate.getDate()}日`;
+
+    // ヘッダー
+    doc.fontSize(20).text('作業日報', { align: 'center' });
+    doc.moveDown(0.3);
+    doc.fontSize(10).text(companyData?.companyName || '', { align: 'right' });
+    doc.moveDown(1);
+
+    // 基本情報
+    doc.fontSize(11);
+    doc.text(`実施日: ${dateStr}`);
+    doc.text(`現場名: ${reportData.siteName || ''}`);
+    doc.text(`作成者: ${reportData.createdByName || ''}`);
+    doc.moveDown(1);
+
+    // 作業員テーブル
+    doc.fontSize(14).text('作業員一覧');
+    doc.moveDown(0.5);
+
+    const workers = reportData.workers || [];
+    const tableTop = doc.y;
+    const colWidths = [130, 65, 65, 55, 170];
+    const headers = ['氏名', '開始', '終了', '昼休憩', '備考'];
+
+    // テーブルヘッダー
+    doc.fontSize(9);
+    let x = 50;
+    headers.forEach((header, i) => {
+      doc.text(header, x, tableTop, { width: colWidths[i] });
+      x += colWidths[i];
+    });
+    doc.moveDown(0.3);
+    doc.moveTo(50, doc.y).lineTo(535, doc.y).stroke();
+
+    // テーブル行
+    doc.fontSize(9);
+    workers.forEach((worker) => {
+      const y = doc.y + 5;
+      let x = 50;
+      const values = [
+        worker.name || '',
+        worker.startTime || '',
+        worker.endTime || '',
+        worker.noLunchBreak ? 'なし' : 'あり',
+        worker.remarks || '',
+      ];
+      values.forEach((val, i) => {
+        doc.text(String(val), x, y, { width: colWidths[i] });
+        x += colWidths[i];
+      });
+      doc.moveDown(0.8);
+    });
+
+    // 連絡事項
+    if (reportData.notes) {
+      doc.moveDown(1);
+      doc.fontSize(14).text('連絡事項');
+      doc.moveDown(0.5);
+      doc.fontSize(10).text(reportData.notes);
+    }
+
+    // フッター
+    doc.moveDown(2);
+    doc.fontSize(8).fillColor('#999999').text(
+      `自動承認: ${new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`,
+      { align: 'right' }
+    );
+
+    doc.end();
+  });
+}
+
+/**
+ * 日報自動承認処理（ステータスがsubmittedに変更された時）
+ */
+exports.onAutoApproveReport = onDocumentUpdated(
+  {
+    document: 'companies/{companyId}/dailyReports/{reportId}',
+    region: 'asia-northeast1',
+  },
+  async (event) => {
+    const beforeData = event.data.before.data();
+    const afterData = event.data.after.data();
+
+    // ステータスがsubmittedに変更された場合のみ処理
+    if (beforeData.status === afterData.status || afterData.status !== 'submitted') {
+      return;
+    }
+
+    const companyId = event.params.companyId;
+    const reportId = event.params.reportId;
+
+    try {
+      // 1. 承認設定を取得（現場設定 > 企業設定のフォールバック）
+      const approvalConfig = await resolveApprovalSettings(companyId, afterData.siteId);
+
+      if (approvalConfig.mode !== 'auto') {
+        console.log(`手動承認モード: ${companyId}/${reportId}`);
+        return;
+      }
+
+      console.log(`自動承認開始: ${companyId}/${reportId}`);
+
+      // 2. ステータスをapprovedに更新
+      const reportRef = db.collection('companies').doc(companyId)
+        .collection('dailyReports').doc(reportId);
+      await reportRef.update({
+        status: 'approved',
+        'approval.approvedBy': 'system',
+        'approval.approvedByName': '自動承認',
+        'approval.approvedAt': Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
+
+      // 3. PDF生成
+      const companyDoc = await db.collection('companies').doc(companyId).get();
+      const companyData = companyDoc.data();
+      const pdfBuffer = await generateReportPdf(afterData, companyData);
+
+      // 4. メール送信（mailコレクションに書き込み）
+      const emails = approvalConfig.emails.filter(e => e && e.trim());
+      if (emails.length > 0) {
+        const reportDate = afterData.reportDate?.toDate
+          ? afterData.reportDate.toDate()
+          : new Date(afterData.reportDate);
+        const dateStr = `${reportDate.getFullYear()}年${reportDate.getMonth() + 1}月${reportDate.getDate()}日`;
+
+        await db.collection('mail').add({
+          to: emails,
+          message: {
+            subject: `【日報】${afterData.siteName || ''} - ${dateStr}`,
+            text: `${companyData?.companyName || ''}の日報が自動承認されました。\n\n現場: ${afterData.siteName || ''}\n実施日: ${dateStr}\n作成者: ${afterData.createdByName || ''}\n\nPDFを添付しています。`,
+            attachments: [{
+              filename: `日報_${afterData.siteName || ''}_${dateStr}.pdf`,
+              content: pdfBuffer.toString('base64'),
+              encoding: 'base64',
+              contentType: 'application/pdf',
+            }],
+          },
+        });
+
+        console.log(`自動承認メール送信: ${emails.join(', ')}`);
+      }
+
+      console.log(`自動承認完了: ${companyId}/${reportId}`);
+    } catch (error) {
+      console.error('自動承認エラー:', error);
     }
   }
 );

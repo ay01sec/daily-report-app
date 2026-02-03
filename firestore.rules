@@ -20,6 +20,11 @@ service cloud.firestore {
     }
 
 
+    // メール送信コレクション（Cloud Functionsからのみ書き込み）
+    match /mail/{mailId} {
+      allow read, write: if false;
+    }
+
     // カスタム通知コレクション
     match /customNotifications/{notificationId} {
       // 読み取り：同一企業のadmin/manager
