@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import Header from '../components/common/Header';
 import manualContent from '../../MANUAL.md?raw';
 
@@ -30,10 +31,11 @@ export default function HelpPage() {
           prose-th:bg-gray-50 prose-th:px-3 prose-th:py-1.5 prose-th:text-left prose-th:font-medium prose-th:text-gray-600
           prose-td:px-3 prose-td:py-1.5 prose-td:border-t prose-td:border-gray-100
           prose-blockquote:border-l-blue-500 prose-blockquote:bg-blue-50 prose-blockquote:py-1 prose-blockquote:px-3 prose-blockquote:rounded-r-lg prose-blockquote:text-blue-800 prose-blockquote:not-italic prose-blockquote:text-sm
-          prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs
+          prose-pre:bg-gray-50 prose-pre:text-gray-700 prose-pre:border prose-pre:border-gray-200
+          prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:text-gray-700
           prose-hr:border-gray-200 prose-hr:my-6
         ">
-          <ReactMarkdown>{manualContent}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{manualContent}</ReactMarkdown>
         </div>
       </main>
     </div>
