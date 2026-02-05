@@ -73,6 +73,11 @@ export function AuthProvider({ children }) {
         throw new Error('このアカウントは無効化されています');
       }
 
+      if (!['admin', 'manager'].includes(userData.role)) {
+        await signOut(auth);
+        throw new Error('日報アプリへのアクセス権限がありません');
+      }
+
       // 4. 最終ログイン日時を更新
       await updateDoc(userDocRef, {
         lastLoginAt: serverTimestamp()
@@ -123,6 +128,10 @@ export function AuthProvider({ children }) {
 
           if (!userData.isActive) {
             throw new Error('このアカウントは無効化されています');
+          }
+
+          if (!['admin', 'manager'].includes(userData.role)) {
+            throw new Error('日報アプリへのアクセス権限がありません');
           }
 
           await updateDoc(userDocRef, {
