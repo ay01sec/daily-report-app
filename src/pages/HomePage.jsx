@@ -40,6 +40,9 @@ function SubmissionStatusBanner({ reports, companyInfo }) {
     return (
       <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
         <p className="font-medium text-green-800">本日の日報は提出済みです</p>
+        <p className="text-sm text-green-700 mt-2">
+          PDF・QRコードを確認するには、下の一覧から該当の日報をタップしてください
+        </p>
       </div>
     );
   }
