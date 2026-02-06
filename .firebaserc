@@ -1,9 +1,1 @@
-{
-  "projects": {},
-  "targets": {},
-  "etags": {
-    "labormanagement-20260202": {
-      "extensionInstances": {}
-    }
-  }
-}
+{"projects": {"default": "labormanagement-20260202"}}

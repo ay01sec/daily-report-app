@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -15,12 +15,13 @@ export function useReport(reportId) {
       return;
     }
 
-    const fetchReport = async () => {
-      try {
-        setLoading(true);
-        const reportRef = doc(db, 'companies', companyId, 'dailyReports', reportId);
-        const snapshot = await getDoc(reportRef);
+    setLoading(true);
+    const reportRef = doc(db, 'companies', companyId, 'dailyReports', reportId);
 
+    // リアルタイムリスナーでステータス変更を監視
+    const unsubscribe = onSnapshot(
+      reportRef,
+      (snapshot) => {
         if (snapshot.exists()) {
           setReport({
             id: snapshot.id,
@@ -30,15 +31,17 @@ export function useReport(reportId) {
         } else {
           setError(new Error('日報が見つかりません'));
         }
-      } catch (err) {
+        setLoading(false);
+      },
+      (err) => {
         console.error('日報取得エラー:', err);
         setError(err);
-      } finally {
         setLoading(false);
       }
-    };
+    );
 
-    fetchReport();
+    // クリーンアップ時にリスナーを解除
+    return () => unsubscribe();
   }, [reportId, companyId]);
 
   return { report, loading, error };

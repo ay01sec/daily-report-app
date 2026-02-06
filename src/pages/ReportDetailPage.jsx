@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import Header from '../components/common/Header';
 import StatusBadge from '../components/common/StatusBadge';
@@ -13,6 +13,18 @@ export default function ReportDetailPage() {
   const navigate = useNavigate();
   const { report, loading, error } = useReport(id);
   const [showQrModal, setShowQrModal] = useState(false);
+  const prevStatusRef = useRef(null);
+
+  // ステータスが submitted → approved に変わったらQRモーダルを自動表示
+  useEffect(() => {
+    if (report?.status === 'approved' && report?.qrCodeUrl) {
+      // 前のステータスがsubmittedだった場合のみ自動表示
+      if (prevStatusRef.current === 'submitted') {
+        setShowQrModal(true);
+      }
+    }
+    prevStatusRef.current = report?.status;
+  }, [report?.status, report?.qrCodeUrl]);
 
   if (loading) {
     return (
@@ -64,6 +76,21 @@ export default function ReportDetailPage() {
             </span>
           )}
         </div>
+
+        {/* 承認待ち表示 */}
+        {report.status === 'submitted' && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <div>
+                <p className="font-medium text-blue-800">承認待ち</p>
+                <p className="text-sm text-blue-600">
+                  承認されるとQRコードが表示されます
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {report.status === 'rejected' && report.rejection?.reason && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4">
