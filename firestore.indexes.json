@@ -7,6 +7,14 @@
         { "fieldPath": "createdBy", "order": "ASCENDING" },
         { "fieldPath": "reportDate", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "dailyReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "reportDate", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
