@@ -23,5 +23,13 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
       allow delete: if request.auth != null;
     }
+
+    // PDF・QRコード（公開）
+    match /companies/{companyId}/reports/{reportId}/{fileName} {
+      // 読み取り：誰でもOK（公開ファイル）
+      allow read: if true;
+      // 書き込み：Cloud Functionsのサービスアカウントのみ（Admin SDKから）
+      allow write: if false;
+    }
   }
 }
