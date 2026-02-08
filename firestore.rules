@@ -16,7 +16,7 @@ service cloud.firestore {
 
     function isManagerOrAbove(companyId) {
       let role = get(/databases/$(database)/documents/companies/$(companyId)/users/$(request.auth.uid)).data.role;
-      return role == 'admin' || role == 'manager';
+      return role == 'admin' || role == 'manager' || role == 'office';
     }
 
 
