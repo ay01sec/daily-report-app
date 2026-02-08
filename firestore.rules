@@ -46,31 +46,31 @@ service cloud.firestore {
 
       match /users/{userId} {
         allow read: if isAuthenticated();
-        // 自分自身の更新、またはadminによる更新を許可
+        // 自分自身の更新、または事務員以上による更新を許可
         allow update: if isAuthenticated() &&
-          (request.auth.uid == userId || isAdmin(companyId));
-        // 作成・削除はadminのみ
-        allow create, delete: if isAuthenticated() && isAdmin(companyId);
+          (request.auth.uid == userId || isManagerOrAbove(companyId));
+        // 作成・削除は事務員以上（adminロール作成制限はCloud Functionsで実装）
+        allow create, delete: if isAuthenticated() && isManagerOrAbove(companyId);
       }
 
       match /employees/{employeeId} {
         allow read: if isAuthenticated();
-        allow create, update, delete: if isAuthenticated() && isAdmin(companyId);
+        allow create, update, delete: if isAuthenticated() && isManagerOrAbove(companyId);
       }
 
       match /sites/{siteId} {
         allow read: if isAuthenticated();
-        allow create, update, delete: if isAuthenticated() && isAdmin(companyId);
+        allow create, update, delete: if isAuthenticated() && isManagerOrAbove(companyId);
       }
 
       match /clients/{clientId} {
         allow read: if isAuthenticated();
-        allow create, update, delete: if isAuthenticated() && isAdmin(companyId);
+        allow create, update, delete: if isAuthenticated() && isManagerOrAbove(companyId);
       }
 
       // 日報コレクション（サブコレクション）
       match /dailyReports/{reportId} {
-        // 読み取り：自分が作成した日報、またはadmin/manager
+        // 読み取り：自分が作成した日報、または事務員以上
         allow read: if isAuthenticated() && (
           resource.data.createdBy == request.auth.uid ||
           isManagerOrAbove(companyId)
@@ -79,16 +79,16 @@ service cloud.firestore {
         // 作成：認証済みユーザー
         allow create: if isAuthenticated();
 
-        // 更新：作成者本人（draft/signed/rejectedのみ）、またはadmin（承認操作）
+        // 更新：作成者本人（draft/signed/rejectedのみ）、または事務員以上（承認・編集操作）
         allow update: if isAuthenticated() && (
           (resource.data.createdBy == request.auth.uid &&
            resource.data.status in ['draft', 'signed', 'rejected']) ||
-          isAdmin(companyId)
+          isManagerOrAbove(companyId)
         );
 
-        // 削除：adminのみ
+        // 削除：事務員以上
         allow delete: if isAuthenticated() &&
-          isAdmin(companyId);
+          isManagerOrAbove(companyId);
       }
     }
   }
