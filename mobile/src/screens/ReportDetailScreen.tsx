@@ -5,7 +5,6 @@ import {
   Image,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   Modal,
   Linking,
@@ -62,16 +61,16 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <Header />
         <LoadingSpinner />
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (error || !report) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <Header />
         <View style={styles.content}>
           <ErrorMessage message={error?.message || '日報が見つかりません'} />
@@ -82,14 +81,14 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
             <Text style={styles.homeLinkText}>ホームに戻る</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   const canEdit = report.status === 'draft' || report.status === 'rejected';
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <Header />
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.titleRow}>
@@ -285,7 +284,7 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
