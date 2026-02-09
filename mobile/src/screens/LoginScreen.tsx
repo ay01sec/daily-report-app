@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -83,6 +84,23 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         <View style={styles.header}>
           <Text style={styles.title}>作業日報</Text>
           <Text style={styles.subtitle}>ログインしてください</Text>
+        </View>
+
+        <View style={styles.noticeContainer}>
+          <Text style={styles.noticeTitle}>ご利用にあたって</Text>
+          <Text style={styles.noticeText}>
+            このアプリは CONSTRUCTION DX SYSTEM の機能を使用します。
+          </Text>
+          <Text style={styles.noticeText}>
+            ご利用には下記サイトの「無料で始める」から企業登録を行い、ユーザー登録を完了させてください。
+          </Text>
+          <TouchableOpacity
+            onPress={() => Linking.openURL('https://construction-manage.improve-biz.com/lp.html')}
+          >
+            <Text style={styles.noticeLink}>
+              https://construction-manage.improve-biz.com/lp.html
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.form}>
@@ -173,6 +191,32 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: '#6b7280',
+    marginTop: 8,
+  },
+  noticeContainer: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+  },
+  noticeTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1e40af',
+    marginBottom: 8,
+  },
+  noticeText: {
+    fontSize: 13,
+    color: '#1e40af',
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  noticeLink: {
+    fontSize: 13,
+    color: '#2563eb',
+    textDecorationLine: 'underline',
     marginTop: 8,
   },
   form: {
