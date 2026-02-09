@@ -1,0 +1,52 @@
+{
+  "cli": {
+    "version": ">= 7.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCR6NgDKYsvrrhYVqoeAlqoz7gxiTgwisc",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "labormanagement-20260202.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "labormanagement-20260202",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "labormanagement-20260202.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "1072304386771",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:1072304386771:web:b53a5b8df10bdcb6111a26"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCR6NgDKYsvrrhYVqoeAlqoz7gxiTgwisc",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "labormanagement-20260202.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "labormanagement-20260202",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "labormanagement-20260202.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "1072304386771",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:1072304386771:web:b53a5b8df10bdcb6111a26"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCR6NgDKYsvrrhYVqoeAlqoz7gxiTgwisc",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "labormanagement-20260202.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "labormanagement-20260202",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "labormanagement-20260202.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "1072304386771",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:1072304386771:web:b53a5b8df10bdcb6111a26"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6758916108"
+      }
+    }
+  }
+}
