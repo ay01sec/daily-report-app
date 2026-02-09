@@ -81,7 +81,8 @@ export default function ReportForm({
 }: ReportFormProps) {
   const { currentUser, userInfo, companyId, companyInfo } = useAuth();
   const { employees, loading: employeesLoading } = useEmployees();
-  const { sites, loading: sitesLoading } = useSites();
+  const { sites, loading: sitesLoading, debugInfo: sitesDebugInfo } = useSites();
+  const [showSitesDebug, setShowSitesDebug] = useState(false);
   const { online, saveOffline, loadOffline, clearOffline, queueForSync } = useOfflineStorage();
 
   // ログインユーザーの表示名を取得
@@ -512,9 +513,21 @@ export default function ReportForm({
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>
-              現場名 <Text style={styles.required}>*</Text>
-            </Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>
+                現場名 <Text style={styles.required}>*</Text>
+              </Text>
+              <TouchableOpacity onPress={() => setShowSitesDebug(!showSitesDebug)}>
+                <Text style={styles.debugToggle}>
+                  {showSitesDebug ? 'デバッグ非表示' : 'デバッグ表示'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {showSitesDebug && sitesDebugInfo && (
+              <View style={styles.sitesDebugContainer}>
+                <Text style={styles.sitesDebugText} selectable>{sitesDebugInfo}</Text>
+              </View>
+            )}
             <ModalPicker
               selectedValue={formData.siteId}
               onValueChange={handleSiteChange}
@@ -670,11 +683,34 @@ const styles = StyleSheet.create({
   field: {
     marginBottom: 16,
   },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   label: {
     fontSize: 14,
     fontWeight: '500',
     color: '#374151',
-    marginBottom: 4,
+  },
+  debugToggle: {
+    fontSize: 12,
+    color: '#6b7280',
+    textDecorationLine: 'underline',
+  },
+  sitesDebugContainer: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 8,
+  },
+  sitesDebugText: {
+    fontSize: 10,
+    fontFamily: 'monospace',
+    color: '#166534',
   },
   required: {
     color: '#ef4444',

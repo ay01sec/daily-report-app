@@ -37,39 +37,74 @@ export default function PhotoUploader({
 }: PhotoUploaderProps) {
   const { companyId } = useAuth();
   const [uploading, setUploading] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
 
   const uploadImage = async (uri: string, fileName: string): Promise<Photo> => {
-    const storagePath = `companies/${companyId}/reports/${reportId || 'draft'}/photos/${fileName}`;
-    const storageRef = ref(storage, storagePath);
+    const logs: string[] = [];
+    try {
+      logs.push(`[1] Start upload: companyId=${companyId}, reportId=${reportId}`);
+      logs.push(`[2] URI: ${uri.substring(0, 50)}...`);
 
-    // expo-file-systemを使用してファイルを読み込む
-    const fileInfo = await FileSystem.getInfoAsync(uri);
-    if (!fileInfo.exists) {
-      throw new Error('ファイルが見つかりません');
+      const storagePath = `companies/${companyId}/reports/${reportId || 'draft'}/photos/${fileName}`;
+      logs.push(`[3] Storage path: ${storagePath}`);
+
+      const storageRef = ref(storage, storagePath);
+      logs.push(`[4] Storage ref created`);
+
+      // expo-file-systemを使用してファイルを読み込む
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      logs.push(`[5] File info: exists=${fileInfo.exists}, size=${(fileInfo as any).size || 'unknown'}`);
+
+      if (!fileInfo.exists) {
+        throw new Error('ファイルが見つかりません');
+      }
+
+      // ファイルをBase64で読み込む
+      logs.push(`[6] Reading file as base64...`);
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      logs.push(`[7] Base64 length: ${base64.length}`);
+
+      // Base64からBlobを作成
+      logs.push(`[8] Creating blob from base64...`);
+      const response = await fetch(`data:image/jpeg;base64,${base64}`);
+      const blob = await response.blob();
+      logs.push(`[9] Blob created: size=${blob.size}, type=${blob.type}`);
+
+      // アップロード
+      logs.push(`[10] Starting upload to Firebase Storage...`);
+      await new Promise<void>((resolve, reject) => {
+        const uploadTask = uploadBytesResumable(storageRef, blob);
+        uploadTask.on(
+          'state_changed',
+          (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            logs.push(`[11] Upload progress: ${progress.toFixed(1)}%`);
+          },
+          (error) => {
+            logs.push(`[ERROR] Upload failed: ${error.code} - ${error.message}`);
+            setDebugInfo(logs.join('\n'));
+            reject(error);
+          },
+          () => {
+            logs.push(`[12] Upload completed!`);
+            resolve();
+          }
+        );
+      });
+
+      const url = await getDownloadURL(storageRef);
+      logs.push(`[13] Download URL obtained`);
+      setDebugInfo(null); // 成功したらデバッグ情報をクリア
+      return { url, path: storagePath, name: fileName };
+    } catch (error: any) {
+      logs.push(`[CATCH ERROR] ${error.name}: ${error.message}`);
+      if (error.code) logs.push(`[ERROR CODE] ${error.code}`);
+      if (error.serverResponse) logs.push(`[SERVER] ${error.serverResponse}`);
+      setDebugInfo(logs.join('\n'));
+      throw error;
     }
-
-    // ファイルをBase64で読み込む
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    // Base64からBlobを作成
-    const response = await fetch(`data:image/jpeg;base64,${base64}`);
-    const blob = await response.blob();
-
-    // アップロード
-    await new Promise<void>((resolve, reject) => {
-      const uploadTask = uploadBytesResumable(storageRef, blob);
-      uploadTask.on(
-        'state_changed',
-        null,
-        (error) => reject(error),
-        () => resolve()
-      );
-    });
-
-    const url = await getDownloadURL(storageRef);
-    return { url, path: storagePath, name: fileName };
   };
 
   const handlePickImage = async () => {
@@ -103,9 +138,11 @@ export default function PhotoUploader({
         newPhotos.push(photo);
       }
       onChange([...photos, ...newPhotos]);
-    } catch (err) {
+    } catch (err: any) {
       console.error('写真アップロードエラー:', err);
-      Alert.alert('エラー', '写真のアップロードに失敗しました');
+      const errorDetail = `${err.name || 'Error'}: ${err.message || 'Unknown error'}${err.code ? `\nCode: ${err.code}` : ''}`;
+      setDebugInfo((prev) => prev ? `${prev}\n\n[handlePickImage ERROR]\n${errorDetail}` : `[handlePickImage ERROR]\n${errorDetail}`);
+      Alert.alert('エラー', `写真のアップロードに失敗しました\n\n${errorDetail}`);
     } finally {
       setUploading(false);
     }
@@ -136,9 +173,11 @@ export default function PhotoUploader({
       const fileName = `${Date.now()}_camera.jpg`;
       const photo = await uploadImage(asset.uri, fileName);
       onChange([...photos, photo]);
-    } catch (err) {
+    } catch (err: any) {
       console.error('写真アップロードエラー:', err);
-      Alert.alert('エラー', '写真のアップロードに失敗しました');
+      const errorDetail = `${err.name || 'Error'}: ${err.message || 'Unknown error'}${err.code ? `\nCode: ${err.code}` : ''}`;
+      setDebugInfo((prev) => prev ? `${prev}\n\n[handleTakePhoto ERROR]\n${errorDetail}` : `[handleTakePhoto ERROR]\n${errorDetail}`);
+      Alert.alert('エラー', `写真のアップロードに失敗しました\n\n${errorDetail}`);
     } finally {
       setUploading(false);
     }
@@ -171,6 +210,18 @@ export default function PhotoUploader({
 
   return (
     <View style={styles.container}>
+      {debugInfo && (
+        <View style={styles.debugContainer}>
+          <View style={styles.debugHeader}>
+            <Text style={styles.debugTitle}>デバッグ情報</Text>
+            <TouchableOpacity onPress={() => setDebugInfo(null)}>
+              <Text style={styles.debugClose}>×</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.debugText} selectable>{debugInfo}</Text>
+        </View>
+      )}
+
       {photos.length > 0 && (
         <View style={styles.grid}>
           {photos.map((photo, index) => (
@@ -211,6 +262,34 @@ export default function PhotoUploader({
 const styles = StyleSheet.create({
   container: {
     gap: 12,
+  },
+  debugContainer: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  debugHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  debugTitle: {
+    fontWeight: 'bold',
+    color: '#991b1b',
+  },
+  debugClose: {
+    fontSize: 20,
+    color: '#991b1b',
+    paddingHorizontal: 8,
+  },
+  debugText: {
+    fontSize: 11,
+    fontFamily: 'monospace',
+    color: '#7f1d1d',
   },
   grid: {
     flexDirection: 'row',
