@@ -40,13 +40,20 @@ export default function ReportEditScreen({ navigation, route }: ReportEditScreen
 
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [currentLocalReportId, setCurrentLocalReportId] = useState<string | null>(null);
+  const [currentFormData, setCurrentFormData] = useState<any>(null);
 
-  const handleSignatureRequest = () => {
+  const handleSignatureRequest = (reportId: string | null, formData: any, localReportId: string) => {
+    setCurrentLocalReportId(localReportId);
+    setCurrentFormData(formData);
     setShowSignatureModal(true);
   };
 
-  const handleSignatureComplete = () => {
+  const handleSignatureComplete = (signedOffline?: boolean) => {
     setShowSignatureModal(false);
+    if (signedOffline) {
+      navigation.navigate('Home');
+    }
   };
 
   const handleSignatureCancel = () => {
@@ -247,8 +254,10 @@ export default function ReportEditScreen({ navigation, route }: ReportEditScreen
         <SignatureModal
           visible={showSignatureModal}
           reportId={id}
+          localReportId={currentLocalReportId || undefined}
           siteName={report.siteName}
           reportDate={report.reportDate}
+          formData={currentFormData}
           onComplete={handleSignatureComplete}
           onCancel={handleSignatureCancel}
         />

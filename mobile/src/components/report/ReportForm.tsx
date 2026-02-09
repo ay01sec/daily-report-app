@@ -31,6 +31,7 @@ import LoadingSpinner from '../common/LoadingSpinner';
 import ModalPicker from '../common/ModalPicker';
 import { getTodayString, fromDateInputValue, formatDate } from '../../utils/dateUtils';
 import { validateReport } from '../../utils/validationUtils';
+import { saveLocalReport, LocalReport } from '../../utils/storageUtils';
 
 interface Worker {
   employeeId?: string;
@@ -69,13 +70,15 @@ const emptyWorker: Worker = {
 interface ReportFormProps {
   initialData?: any;
   reportId?: string | null;
-  onSignatureRequest: (reportId: string, formData: FormData) => void;
+  localReportId?: string | null;
+  onSignatureRequest: (reportId: string | null, formData: FormData, localReportId: string) => void;
   onSaved?: () => void;
 }
 
 export default function ReportForm({
   initialData = null,
   reportId = null,
+  localReportId: initialLocalReportId = null,
   onSignatureRequest,
   onSaved,
 }: ReportFormProps) {
@@ -84,6 +87,9 @@ export default function ReportForm({
   const { sites, loading: sitesLoading, debugInfo: sitesDebugInfo } = useSites();
   const [showSitesDebug, setShowSitesDebug] = useState(false);
   const { online, saveOffline, loadOffline, clearOffline, queueForSync } = useOfflineStorage();
+
+  // ローカル保存用のIDを管理
+  const [localReportId] = useState(() => initialLocalReportId || `local_${Date.now()}`);
 
   // ログインユーザーの表示名を取得
   const loggedInUserName = useMemo(() => {
@@ -303,40 +309,51 @@ export default function ReportForm({
 
     setSaving(true);
     try {
-      if (!online) {
-        const data = buildReportData(true, !!reportId);
-        await queueForSync(data);
-        await clearOffline('new');
-        Alert.alert('保存完了', 'オフラインのため、ローカルに保存しました。オンライン復帰時に同期されます。');
-        onSaved?.();
-        return;
-      }
+      // 常にローカルに保存
+      const localReport: LocalReport = {
+        localId: localReportId,
+        companyId: companyId!,
+        firebaseId: reportId || undefined,
+        formData,
+        status: 'draft',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await saveLocalReport(localReport);
 
-      const data = buildReportData(false, !!reportId);
+      if (online) {
+        // オンライン：Firebaseにも保存
+        try {
+          const data = buildReportData(false, !!reportId);
 
-      if (reportId) {
-        await updateDoc(doc(db, 'companies', companyId!, 'dailyReports', reportId), {
-          ...data,
-          updatedAt: serverTimestamp(),
-        });
+          if (reportId) {
+            await updateDoc(doc(db, 'companies', companyId!, 'dailyReports', reportId), {
+              ...data,
+              updatedAt: serverTimestamp(),
+            });
+          } else {
+            data.createdAt = serverTimestamp();
+            const docRef = await addDoc(collection(db, 'companies', companyId!, 'dailyReports'), data);
+            // ローカル日報にFirebase IDを紐付け
+            localReport.firebaseId = docRef.id;
+            await saveLocalReport(localReport);
+          }
+          await clearOffline('new');
+          onSaved?.();
+        } catch (firebaseErr) {
+          console.error('Firebase保存エラー:', firebaseErr);
+          Alert.alert('保存完了', 'ローカルに保存しました。ネットワークエラーのため、Firebase保存は後で同期されます。');
+          onSaved?.();
+        }
       } else {
-        data.createdAt = serverTimestamp();
-        await addDoc(collection(db, 'companies', companyId!, 'dailyReports'), data);
+        // オフライン：ローカルのみ
         await clearOffline('new');
+        Alert.alert('保存完了', 'オフラインのため、ローカルに保存しました。');
+        onSaved?.();
       }
-
-      onSaved?.();
     } catch (err) {
       console.error('保存エラー:', err);
-      if (!online) {
-        const data = buildReportData(true, !!reportId);
-        await queueForSync(data);
-        await clearOffline('new');
-        Alert.alert('エラー', '保存に失敗しました。ローカルに保存しました。');
-        onSaved?.();
-      } else {
-        Alert.alert('エラー', '保存に失敗しました');
-      }
+      Alert.alert('エラー', '保存に失敗しました');
     } finally {
       setSaving(false);
     }
@@ -349,31 +366,49 @@ export default function ReportForm({
       return;
     }
 
-    if (!online) {
-      Alert.alert('エラー', 'サイン機能を使用するにはオンライン接続が必要です');
-      return;
-    }
-
     setSaving(true);
     try {
-      const data = buildReportData(false, !!reportId);
+      // 常にローカルに保存
+      const localReport: LocalReport = {
+        localId: localReportId,
+        companyId: companyId!,
+        firebaseId: reportId || undefined,
+        formData,
+        status: 'draft',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await saveLocalReport(localReport);
+
       let newReportId = reportId;
 
-      if (reportId) {
-        await updateDoc(doc(db, 'companies', companyId!, 'dailyReports', reportId), {
-          ...data,
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        data.createdAt = serverTimestamp();
-        const docRef = await addDoc(collection(db, 'companies', companyId!, 'dailyReports'), data);
-        newReportId = docRef.id;
-        await clearOffline('new');
+      if (online) {
+        // オンライン：Firebaseにも保存してからサイン画面へ
+        try {
+          const data = buildReportData(false, !!reportId);
+
+          if (reportId) {
+            await updateDoc(doc(db, 'companies', companyId!, 'dailyReports', reportId), {
+              ...data,
+              updatedAt: serverTimestamp(),
+            });
+          } else {
+            data.createdAt = serverTimestamp();
+            const docRef = await addDoc(collection(db, 'companies', companyId!, 'dailyReports'), data);
+            newReportId = docRef.id;
+            // ローカル日報にFirebase IDを紐付け
+            localReport.firebaseId = newReportId;
+            await saveLocalReport(localReport);
+            await clearOffline('new');
+          }
+        } catch (firebaseErr) {
+          console.error('Firebase保存エラー:', firebaseErr);
+          // Firebase保存に失敗してもサイン画面へ進む（オフラインモード）
+        }
       }
 
-      if (newReportId) {
-        onSignatureRequest(newReportId, formData);
-      }
+      // サイン画面へ（オンライン/オフライン両対応）
+      onSignatureRequest(newReportId, formData, localReportId);
     } catch (err) {
       console.error('保存エラー:', err);
       Alert.alert('エラー', '保存に失敗しました');

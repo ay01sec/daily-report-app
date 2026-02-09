@@ -9,26 +9,37 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import SignatureScreen, { SignatureViewRef } from 'react-native-signature-canvas';
+import NetInfo from '@react-native-community/netinfo';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { doc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db, storage } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatDateWithDay } from '../../utils/dateUtils';
+import {
+  saveSignatureLocally,
+  saveLocalReport,
+  getLocalReport,
+  LocalReport,
+} from '../../utils/storageUtils';
 
 interface SignatureModalProps {
   visible: boolean;
   reportId: string;
+  localReportId?: string; // ローカル保存用ID
   siteName?: string;
   reportDate?: any;
-  onComplete: () => void;
+  formData?: any; // オフライン保存用
+  onComplete: (signedOffline?: boolean) => void;
   onCancel: () => void;
 }
 
 export default function SignatureModal({
   visible,
   reportId,
+  localReportId,
   siteName,
   reportDate,
+  formData,
   onComplete,
   onCancel,
 }: SignatureModalProps) {
@@ -52,31 +63,89 @@ export default function SignatureModal({
 
     setSaving(true);
     try {
-      const response = await fetch(signature);
-      const blob = await response.blob();
+      // ネットワーク状態を確認
+      const netState = await NetInfo.fetch();
+      const isOnline = netState.isConnected && netState.isInternetReachable;
 
-      const timestamp = Date.now();
-      const storagePath = `signatures/${companyId}/${reportId}/${timestamp}.png`;
-      const storageRef = ref(storage, storagePath);
+      // 署名をローカルに保存（常に保存）
+      const localId = localReportId || `local_${Date.now()}`;
+      const signatureLocalPath = await saveSignatureLocally(localId, signature);
 
-      await uploadBytes(storageRef, blob);
-      const downloadUrl = await getDownloadURL(storageRef);
+      if (isOnline && reportId) {
+        // オンライン：Firebaseにアップロード
+        try {
+          const response = await fetch(signature);
+          const blob = await response.blob();
 
-      await updateDoc(doc(db, 'companies', companyId!, 'dailyReports', reportId), {
-        'clientSignature.imageUrl': downloadUrl,
-        'clientSignature.signedAt': Timestamp.now(),
-        'clientSignature.signerName': null,
-        status: 'signed',
-        updatedAt: serverTimestamp(),
-      });
+          const timestamp = Date.now();
+          const storagePath = `signatures/${companyId}/${reportId}/${timestamp}.png`;
+          const storageRef = ref(storage, storagePath);
 
-      onComplete();
+          await uploadBytes(storageRef, blob);
+          const downloadUrl = await getDownloadURL(storageRef);
+
+          await updateDoc(doc(db, 'companies', companyId!, 'dailyReports', reportId), {
+            'clientSignature.imageUrl': downloadUrl,
+            'clientSignature.signedAt': Timestamp.now(),
+            'clientSignature.signerName': null,
+            status: 'signed',
+            updatedAt: serverTimestamp(),
+          });
+
+          // ローカルにも保存（Firebaseにアップロード済みとしてマーク）
+          const localReport: LocalReport = {
+            localId,
+            companyId: companyId!,
+            firebaseId: reportId,
+            formData: formData || {},
+            status: 'signed',
+            signatureLocalPath,
+            signatureFirebaseUrl: downloadUrl,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          await saveLocalReport(localReport);
+
+          onComplete(false); // オンラインで完了
+        } catch (uploadErr) {
+          console.error('Firebase署名アップロードエラー:', uploadErr);
+          // Firebaseアップロード失敗時はローカルに保存
+          await saveSignedReportLocally(localId, signatureLocalPath);
+          Alert.alert(
+            'オフライン保存',
+            'ネットワークエラーのため、署名をローカルに保存しました。ネットワーク接続後に自動で同期されます。',
+            [{ text: 'OK', onPress: () => onComplete(true) }]
+          );
+        }
+      } else {
+        // オフライン：ローカルのみに保存
+        await saveSignedReportLocally(localId, signatureLocalPath);
+        Alert.alert(
+          'オフライン保存',
+          '署名をローカルに保存しました。ネットワーク接続後に「送信」できます。',
+          [{ text: 'OK', onPress: () => onComplete(true) }]
+        );
+      }
     } catch (err) {
       console.error('サイン保存エラー:', err);
       Alert.alert('エラー', 'サインの保存に失敗しました');
     } finally {
       setSaving(false);
     }
+  };
+
+  const saveSignedReportLocally = async (localId: string, signatureLocalPath: string) => {
+    const localReport: LocalReport = {
+      localId,
+      companyId: companyId!,
+      firebaseId: reportId || undefined,
+      formData: formData || {},
+      status: 'signed',
+      signatureLocalPath,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await saveLocalReport(localReport);
   };
 
   const handleCancel = () => {

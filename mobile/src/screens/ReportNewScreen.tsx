@@ -28,18 +28,25 @@ interface FormData {
 export default function ReportNewScreen({ navigation }: ReportNewScreenProps) {
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [currentReportId, setCurrentReportId] = useState<string | null>(null);
+  const [currentLocalReportId, setCurrentLocalReportId] = useState<string | null>(null);
   const [currentFormData, setCurrentFormData] = useState<FormData | null>(null);
 
-  const handleSignatureRequest = (reportId: string, formData: FormData) => {
+  const handleSignatureRequest = (reportId: string | null, formData: FormData, localReportId: string) => {
     setCurrentReportId(reportId);
+    setCurrentLocalReportId(localReportId);
     setCurrentFormData(formData);
     setShowSignatureModal(true);
   };
 
-  const handleSignatureComplete = () => {
+  const handleSignatureComplete = (signedOffline?: boolean) => {
     setShowSignatureModal(false);
-    if (currentReportId) {
+    if (signedOffline) {
+      // オフラインで署名完了した場合はホームに戻る
+      navigation.navigate('Home');
+    } else if (currentReportId) {
       navigation.replace('ReportEdit', { id: currentReportId });
+    } else {
+      navigation.navigate('Home');
     }
   };
 
@@ -47,6 +54,8 @@ export default function ReportNewScreen({ navigation }: ReportNewScreenProps) {
     setShowSignatureModal(false);
     if (currentReportId) {
       navigation.replace('ReportEdit', { id: currentReportId });
+    } else {
+      navigation.navigate('Home');
     }
   };
 
@@ -70,12 +79,14 @@ export default function ReportNewScreen({ navigation }: ReportNewScreenProps) {
         />
       </View>
 
-      {showSignatureModal && currentReportId && (
+      {showSignatureModal && (
         <SignatureModal
           visible={showSignatureModal}
-          reportId={currentReportId}
+          reportId={currentReportId || ''}
+          localReportId={currentLocalReportId || undefined}
           siteName={currentFormData?.siteName}
           reportDate={currentFormData?.reportDate}
+          formData={currentFormData}
           onComplete={handleSignatureComplete}
           onCancel={handleSignatureCancel}
         />
