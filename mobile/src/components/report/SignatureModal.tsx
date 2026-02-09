@@ -78,7 +78,8 @@ export default function SignatureModal({
           const blob = await response.blob();
 
           const timestamp = Date.now();
-          const storagePath = `signatures/${companyId}/${reportId}/${timestamp}.png`;
+          // 写真と同じパス構造を使用（Firebase Storage rulesに準拠）
+          const storagePath = `companies/${companyId}/reports/${reportId}/photos/signature_${timestamp}.png`;
           const storageRef = ref(storage, storagePath);
 
           await uploadBytes(storageRef, blob);
@@ -93,6 +94,8 @@ export default function SignatureModal({
           });
 
           // ローカルにも保存（Firebaseにアップロード済みとしてマーク）
+          // 既存のローカルレポートがあれば取得して、localPhotosなどを保持
+          const existingReport = await getLocalReport(localId);
           const localReport: LocalReport = {
             localId,
             companyId: companyId!,
@@ -101,7 +104,9 @@ export default function SignatureModal({
             status: 'signed',
             signatureLocalPath,
             signatureFirebaseUrl: downloadUrl,
-            createdAt: new Date().toISOString(),
+            // 既存のlocalPhotosを保持
+            localPhotos: existingReport?.localPhotos,
+            createdAt: existingReport?.createdAt || new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
           await saveLocalReport(localReport);
@@ -135,6 +140,9 @@ export default function SignatureModal({
   };
 
   const saveSignedReportLocally = async (localId: string, signatureLocalPath: string) => {
+    // 既存のローカルレポートがあれば取得して、localPhotosなどを保持
+    const existingReport = await getLocalReport(localId);
+
     const localReport: LocalReport = {
       localId,
       companyId: companyId!,
@@ -142,9 +150,19 @@ export default function SignatureModal({
       formData: formData || {},
       status: 'signed',
       signatureLocalPath,
-      createdAt: new Date().toISOString(),
+      // 既存のlocalPhotosを保持
+      localPhotos: existingReport?.localPhotos,
+      createdAt: existingReport?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    console.log('[SignatureModal] ローカル署名保存:', {
+      localId,
+      hasFirebaseId: !!localReport.firebaseId,
+      signatureLocalPath,
+      localPhotosCount: localReport.localPhotos?.length || 0,
+    });
+
     await saveLocalReport(localReport);
   };
 

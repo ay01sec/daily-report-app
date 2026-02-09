@@ -12,6 +12,8 @@ import { Picker } from '@react-native-picker/picker';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { usePrefetchMasterData } from '../hooks/usePrefetchMasterData';
+import { useOfflineStorage } from '../hooks/useOfflineStorage';
 import Header from '../components/common/Header';
 import StatusBadge from '../components/common/StatusBadge';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -103,6 +105,12 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+
+  // マスターデータのプリフェッチ（ログイン時に現場・作業員データを取得）
+  const { prefetching, prefetched, sitesCount, employeesCount } = usePrefetchMasterData();
+
+  // オフライン同期管理
+  const { online, syncing, pendingCount, syncLocalReports } = useOfflineStorage();
 
   const fetchReports = useCallback(async () => {
     if (!companyId || !currentUser) return;
@@ -205,6 +213,41 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       <Header />
 
       <View style={styles.content}>
+        {/* オフラインステータスバナー */}
+        {!online && (
+          <View style={styles.bannerOffline}>
+            <Text style={styles.bannerOfflineTitle}>オフラインモード</Text>
+            <Text style={styles.bannerOfflineText}>
+              キャッシュデータで動作中です。ネットワーク接続時に自動同期します。
+            </Text>
+          </View>
+        )}
+
+        {/* 同期待ちバナー */}
+        {pendingCount > 0 && (
+          <TouchableOpacity
+            style={styles.bannerSync}
+            onPress={async () => {
+              if (online && !syncing) {
+                console.log('[HomeScreen] 手動同期開始');
+                await syncLocalReports();
+                console.log('[HomeScreen] 手動同期完了');
+              }
+            }}
+            disabled={!online || syncing}
+          >
+            <Text style={styles.bannerSyncTitle}>
+              {syncing ? '同期中...' : `${pendingCount}件の日報が同期待ちです`}
+            </Text>
+            {online && !syncing && (
+              <Text style={styles.bannerSyncText}>タップして今すぐ同期</Text>
+            )}
+            {!online && (
+              <Text style={styles.bannerSyncText}>オフラインのため同期できません</Text>
+            )}
+          </TouchableOpacity>
+        )}
+
         {!loading && (
           <SubmissionStatusBanner reports={reports} companyInfo={companyInfo} />
         )}
@@ -320,6 +363,40 @@ const styles = StyleSheet.create({
   bannerBlueTitle: {
     fontWeight: '500',
     color: '#1e40af',
+  },
+  bannerOffline: {
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  bannerOfflineTitle: {
+    fontWeight: '500',
+    color: '#92400e',
+  },
+  bannerOfflineText: {
+    fontSize: 14,
+    color: '#b45309',
+    marginTop: 4,
+  },
+  bannerSync: {
+    backgroundColor: '#faf5ff',
+    borderWidth: 1,
+    borderColor: '#e9d5ff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  bannerSyncTitle: {
+    fontWeight: '500',
+    color: '#7c3aed',
+  },
+  bannerSyncText: {
+    fontSize: 14,
+    color: '#8b5cf6',
+    marginTop: 4,
   },
   rejectedBanner: {
     backgroundColor: '#fef2f2',

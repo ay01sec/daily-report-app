@@ -31,7 +31,7 @@ import LoadingSpinner from '../common/LoadingSpinner';
 import ModalPicker from '../common/ModalPicker';
 import { getTodayString, fromDateInputValue, formatDate } from '../../utils/dateUtils';
 import { validateReport } from '../../utils/validationUtils';
-import { saveLocalReport, LocalReport } from '../../utils/storageUtils';
+import { saveLocalReport, LocalReport, LocalPhoto } from '../../utils/storageUtils';
 
 interface Worker {
   employeeId?: string;
@@ -121,6 +121,7 @@ export default function ReportForm({
   const [errors, setErrors] = useState<any>({});
   const [saving, setSaving] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [localPhotos, setLocalPhotos] = useState<LocalPhoto[]>([]);
 
   // 初期データまたはオフラインデータの読み込み
   useEffect(() => {
@@ -309,13 +310,30 @@ export default function ReportForm({
 
     setSaving(true);
     try {
+      // オフライン同期用にFirebaseに必要なフィールドを含めたデータを作成
+      const fullFormData = {
+        ...formData,
+        companyId: companyId!,
+        createdBy: currentUser!.uid,
+        createdByName: userInfo?.displayName || userInfo?.email || '',
+        workers: formData.workers.map((w) => ({
+          employeeId: w.employeeId,
+          name: w.name,
+          startTime: w.startTime,
+          endTime: w.endTime,
+          noLunchBreak: w.noLunchBreak || false,
+          remarks: w.remarks || '',
+        })),
+      };
+
       // 常にローカルに保存
       const localReport: LocalReport = {
         localId: localReportId,
         companyId: companyId!,
         firebaseId: reportId || undefined,
-        formData,
+        formData: fullFormData,
         status: 'draft',
+        localPhotos: localPhotos.length > 0 ? localPhotos : undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -368,13 +386,30 @@ export default function ReportForm({
 
     setSaving(true);
     try {
+      // オフライン同期用にFirebaseに必要なフィールドを含めたデータを作成
+      const fullFormData = {
+        ...formData,
+        companyId: companyId!,
+        createdBy: currentUser!.uid,
+        createdByName: userInfo?.displayName || userInfo?.email || '',
+        workers: formData.workers.map((w) => ({
+          employeeId: w.employeeId,
+          name: w.name,
+          startTime: w.startTime,
+          endTime: w.endTime,
+          noLunchBreak: w.noLunchBreak || false,
+          remarks: w.remarks || '',
+        })),
+      };
+
       // 常にローカルに保存
       const localReport: LocalReport = {
         localId: localReportId,
         companyId: companyId!,
         firebaseId: reportId || undefined,
-        formData,
+        formData: fullFormData,
         status: 'draft',
+        localPhotos: localPhotos.length > 0 ? localPhotos : undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -408,7 +443,7 @@ export default function ReportForm({
       }
 
       // サイン画面へ（オンライン/オフライン両対応）
-      onSignatureRequest(newReportId, formData, localReportId);
+      onSignatureRequest(newReportId, fullFormData, localReportId);
     } catch (err) {
       console.error('保存エラー:', err);
       Alert.alert('エラー', '保存に失敗しました');
@@ -456,7 +491,7 @@ export default function ReportForm({
         {!online && (
           <View style={styles.offlineWarning}>
             <Text style={styles.offlineText}>
-              オフラインモードです。下書き保存はローカルに保存されます。
+              オフラインモードです。下書き保存・サインはローカルに保存され、ネットワーク接続時に自動同期されます。
             </Text>
           </View>
         )}
@@ -626,8 +661,14 @@ export default function ReportForm({
           <PhotoUploader
             reportId={reportId}
             photos={formData.photos}
-            onChange={(photos) => setFormData((prev) => ({ ...prev, photos }))}
+            onChange={(photos, newLocalPhotos) => {
+              setFormData((prev) => ({ ...prev, photos }));
+              if (newLocalPhotos) {
+                setLocalPhotos(newLocalPhotos);
+              }
+            }}
             disabled={!canEdit}
+            localPhotos={localPhotos}
           />
         </View>
 
@@ -643,9 +684,9 @@ export default function ReportForm({
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.button, styles.signButton, (!online || saving) && styles.buttonDisabled]}
+              style={[styles.button, styles.signButton, saving && styles.buttonDisabled]}
               onPress={handleProceedToSign}
-              disabled={saving || !online}
+              disabled={saving}
             >
               <Text style={styles.signButtonText}>元請サインへ進む</Text>
             </TouchableOpacity>

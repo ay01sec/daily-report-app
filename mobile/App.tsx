@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from './src/contexts/AuthContext';
+import { OfflineStorageProvider } from './src/contexts/OfflineStorageContext';
 import AppNavigator from './src/navigation/AppNavigator';
 
 interface ErrorBoundaryState {
@@ -59,8 +60,10 @@ export default function App() {
       <ErrorBoundary>
         <SafeAreaProvider>
           <AuthProvider fallback={<LoadingScreen />}>
-            <StatusBar style="light" />
-            <AppNavigator />
+            <OfflineStorageProvider>
+              <StatusBar style="light" />
+              <AppNavigator />
+            </OfflineStorageProvider>
           </AuthProvider>
         </SafeAreaProvider>
       </ErrorBoundary>

@@ -10,9 +10,11 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import NetInfo from '@react-native-community/netinfo';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
+import { savePhotoLocally, deletePhotoLocally, LocalPhoto } from '../../utils/storageUtils';
 
 const MAX_PHOTOS = 3;
 
@@ -20,13 +22,17 @@ interface Photo {
   url: string;
   path?: string;
   name?: string;
+  // オフライン保存用
+  isLocal?: boolean;
+  localPath?: string;
 }
 
 interface PhotoUploaderProps {
   reportId?: string | null;
   photos: Photo[];
-  onChange: (photos: Photo[]) => void;
+  onChange: (photos: Photo[], localPhotos?: LocalPhoto[]) => void;
   disabled?: boolean;
+  localPhotos?: LocalPhoto[];  // オフライン保存された写真の情報
 }
 
 export default function PhotoUploader({
@@ -34,10 +40,22 @@ export default function PhotoUploader({
   photos = [],
   onChange,
   disabled = false,
+  localPhotos = [],
 }: PhotoUploaderProps) {
   const { companyId } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
+
+  // オフライン時に写真をローカルに保存
+  const saveImageLocally = async (uri: string, fileName: string): Promise<Photo> => {
+    const localPhoto = await savePhotoLocally(uri, fileName);
+    return {
+      url: localPhoto.localPath,  // ローカルパスをURLとして使用
+      name: fileName,
+      isLocal: true,
+      localPath: localPhoto.localPath,
+    };
+  };
 
   const uploadImage = async (uri: string, fileName: string): Promise<Photo> => {
     const logs: string[] = [];
@@ -131,18 +149,42 @@ export default function PhotoUploader({
       if (result.canceled || !result.assets || result.assets.length === 0) return;
 
       setUploading(true);
+
+      // ネットワーク状態を確認
+      const netState = await NetInfo.fetch();
+      const isOnline = netState.isConnected && netState.isInternetReachable;
+
       const newPhotos: Photo[] = [];
+      const newLocalPhotos: LocalPhoto[] = [...localPhotos];
+
       for (const asset of result.assets) {
         const fileName = `${Date.now()}_${asset.fileName || 'photo.jpg'}`;
-        const photo = await uploadImage(asset.uri, fileName);
-        newPhotos.push(photo);
+
+        if (isOnline) {
+          // オンライン：Firebase Storageにアップロード
+          const photo = await uploadImage(asset.uri, fileName);
+          newPhotos.push(photo);
+        } else {
+          // オフライン：ローカルに保存
+          const photo = await saveImageLocally(asset.uri, fileName);
+          newPhotos.push(photo);
+          newLocalPhotos.push({
+            localPath: photo.localPath!,
+            fileName,
+          });
+        }
       }
-      onChange([...photos, ...newPhotos]);
+
+      onChange([...photos, ...newPhotos], newLocalPhotos.length > localPhotos.length ? newLocalPhotos : undefined);
+
+      if (!isOnline && newPhotos.length > 0) {
+        Alert.alert('オフライン保存', '写真をローカルに保存しました。ネットワーク接続時に自動でアップロードされます。');
+      }
     } catch (err: any) {
-      console.error('写真アップロードエラー:', err);
+      console.error('写真保存エラー:', err);
       const errorDetail = `${err.name || 'Error'}: ${err.message || 'Unknown error'}${err.code ? `\nCode: ${err.code}` : ''}`;
       setDebugInfo((prev) => prev ? `${prev}\n\n[handlePickImage ERROR]\n${errorDetail}` : `[handlePickImage ERROR]\n${errorDetail}`);
-      Alert.alert('エラー', `写真のアップロードに失敗しました\n\n${errorDetail}`);
+      Alert.alert('エラー', `写真の保存に失敗しました\n\n${errorDetail}`);
     } finally {
       setUploading(false);
     }
@@ -171,13 +213,36 @@ export default function PhotoUploader({
       setUploading(true);
       const asset = result.assets[0];
       const fileName = `${Date.now()}_camera.jpg`;
-      const photo = await uploadImage(asset.uri, fileName);
-      onChange([...photos, photo]);
+
+      // ネットワーク状態を確認
+      const netState = await NetInfo.fetch();
+      const isOnline = netState.isConnected && netState.isInternetReachable;
+
+      let photo: Photo;
+      const newLocalPhotos: LocalPhoto[] = [...localPhotos];
+
+      if (isOnline) {
+        // オンライン：Firebase Storageにアップロード
+        photo = await uploadImage(asset.uri, fileName);
+      } else {
+        // オフライン：ローカルに保存
+        photo = await saveImageLocally(asset.uri, fileName);
+        newLocalPhotos.push({
+          localPath: photo.localPath!,
+          fileName,
+        });
+      }
+
+      onChange([...photos, photo], newLocalPhotos.length > localPhotos.length ? newLocalPhotos : undefined);
+
+      if (!isOnline) {
+        Alert.alert('オフライン保存', '写真をローカルに保存しました。ネットワーク接続時に自動でアップロードされます。');
+      }
     } catch (err: any) {
-      console.error('写真アップロードエラー:', err);
+      console.error('写真保存エラー:', err);
       const errorDetail = `${err.name || 'Error'}: ${err.message || 'Unknown error'}${err.code ? `\nCode: ${err.code}` : ''}`;
       setDebugInfo((prev) => prev ? `${prev}\n\n[handleTakePhoto ERROR]\n${errorDetail}` : `[handleTakePhoto ERROR]\n${errorDetail}`);
-      Alert.alert('エラー', `写真のアップロードに失敗しました\n\n${errorDetail}`);
+      Alert.alert('エラー', `写真の保存に失敗しました\n\n${errorDetail}`);
     } finally {
       setUploading(false);
     }
@@ -186,7 +251,15 @@ export default function PhotoUploader({
   const handleRemove = async (index: number) => {
     const photo = photos[index];
     try {
-      if (photo.path) {
+      if (photo.isLocal && photo.localPath) {
+        // ローカル写真を削除
+        await deletePhotoLocally(photo.localPath);
+        // localPhotosからも削除
+        const updatedLocalPhotos = localPhotos.filter(lp => lp.localPath !== photo.localPath);
+        onChange(photos.filter((_, i) => i !== index), updatedLocalPhotos);
+        return;
+      } else if (photo.path) {
+        // Firebase Storage から削除
         const storageRef = ref(storage, photo.path);
         await deleteObject(storageRef).catch(() => {});
       }

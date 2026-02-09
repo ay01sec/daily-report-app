@@ -5,6 +5,103 @@ const DRAFT_PREFIX = 'draft_';
 const PENDING_SYNC_KEY = 'pending_sync_reports';
 const LOCAL_REPORTS_KEY = 'local_reports';
 const SIGNATURES_DIR = `${FileSystem.documentDirectory}signatures/`;
+const PHOTOS_DIR = `${FileSystem.documentDirectory}photos/`;
+const CACHE_SITES_KEY = 'cache_sites';
+const CACHE_EMPLOYEES_KEY = 'cache_employees';
+const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24時間
+
+// ========== マスターデータキャッシュ ==========
+
+interface CacheData<T> {
+  data: T[];
+  companyId: string;
+  cachedAt: string;
+}
+
+// 現場データをキャッシュに保存
+export async function cacheSites(companyId: string, sites: any[]): Promise<void> {
+  try {
+    const cacheData: CacheData<any> = {
+      data: sites,
+      companyId,
+      cachedAt: new Date().toISOString(),
+    };
+    await AsyncStorage.setItem(CACHE_SITES_KEY, JSON.stringify(cacheData));
+  } catch (error) {
+    console.error('現場キャッシュ保存エラー:', error);
+  }
+}
+
+// 現場データをキャッシュから取得
+export async function getCachedSites(companyId: string): Promise<any[] | null> {
+  try {
+    const data = await AsyncStorage.getItem(CACHE_SITES_KEY);
+    if (!data) return null;
+
+    const cacheData: CacheData<any> = JSON.parse(data);
+
+    // 会社IDが一致するか確認
+    if (cacheData.companyId !== companyId) return null;
+
+    // キャッシュの有効期限を確認
+    const cachedAt = new Date(cacheData.cachedAt).getTime();
+    if (Date.now() - cachedAt > CACHE_EXPIRY_MS) {
+      return null; // 期限切れ
+    }
+
+    return cacheData.data;
+  } catch (error) {
+    console.error('現場キャッシュ取得エラー:', error);
+    return null;
+  }
+}
+
+// 従業員データをキャッシュに保存
+export async function cacheEmployees(companyId: string, employees: any[]): Promise<void> {
+  try {
+    const cacheData: CacheData<any> = {
+      data: employees,
+      companyId,
+      cachedAt: new Date().toISOString(),
+    };
+    await AsyncStorage.setItem(CACHE_EMPLOYEES_KEY, JSON.stringify(cacheData));
+  } catch (error) {
+    console.error('従業員キャッシュ保存エラー:', error);
+  }
+}
+
+// 従業員データをキャッシュから取得
+export async function getCachedEmployees(companyId: string): Promise<any[] | null> {
+  try {
+    const data = await AsyncStorage.getItem(CACHE_EMPLOYEES_KEY);
+    if (!data) return null;
+
+    const cacheData: CacheData<any> = JSON.parse(data);
+
+    // 会社IDが一致するか確認
+    if (cacheData.companyId !== companyId) return null;
+
+    // キャッシュの有効期限を確認
+    const cachedAt = new Date(cacheData.cachedAt).getTime();
+    if (Date.now() - cachedAt > CACHE_EXPIRY_MS) {
+      return null; // 期限切れ
+    }
+
+    return cacheData.data;
+  } catch (error) {
+    console.error('従業員キャッシュ取得エラー:', error);
+    return null;
+  }
+}
+
+// キャッシュをクリア
+export async function clearMasterDataCache(): Promise<void> {
+  try {
+    await AsyncStorage.multiRemove([CACHE_SITES_KEY, CACHE_EMPLOYEES_KEY]);
+  } catch (error) {
+    console.error('キャッシュクリアエラー:', error);
+  }
+}
 
 // ローカル署名画像の保存ディレクトリを確保
 async function ensureSignatureDir(): Promise<void> {
@@ -62,6 +159,73 @@ export async function deleteSignatureLocally(filePath: string): Promise<boolean>
   }
 }
 
+// ========== 写真ローカル保存 ==========
+
+// ローカル写真の保存ディレクトリを確保
+async function ensurePhotosDir(): Promise<void> {
+  const dirInfo = await FileSystem.getInfoAsync(PHOTOS_DIR);
+  if (!dirInfo.exists) {
+    await FileSystem.makeDirectoryAsync(PHOTOS_DIR, { intermediates: true });
+  }
+}
+
+export interface LocalPhoto {
+  localPath: string;
+  fileName: string;
+  firebaseUrl?: string;  // Firebase Storageにアップロード済みの場合のURL
+  firebasePath?: string; // Firebase Storageのパス
+}
+
+// 写真をローカルに保存（URIからコピー）
+export async function savePhotoLocally(
+  sourceUri: string,
+  fileName: string
+): Promise<LocalPhoto> {
+  await ensurePhotosDir();
+  const localPath = `${PHOTOS_DIR}${Date.now()}_${fileName}`;
+
+  // ソースURIからローカルにコピー
+  await FileSystem.copyAsync({
+    from: sourceUri,
+    to: localPath,
+  });
+
+  return {
+    localPath,
+    fileName,
+  };
+}
+
+// ローカル写真を読み込み（Base64で返す）
+export async function loadPhotoLocally(localPath: string): Promise<string | null> {
+  try {
+    const fileInfo = await FileSystem.getInfoAsync(localPath);
+    if (!fileInfo.exists) return null;
+
+    const base64 = await FileSystem.readAsStringAsync(localPath, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return `data:image/jpeg;base64,${base64}`;
+  } catch (error) {
+    console.error('写真読み込みエラー:', error);
+    return null;
+  }
+}
+
+// ローカル写真を削除
+export async function deletePhotoLocally(localPath: string): Promise<boolean> {
+  try {
+    const fileInfo = await FileSystem.getInfoAsync(localPath);
+    if (fileInfo.exists) {
+      await FileSystem.deleteAsync(localPath);
+    }
+    return true;
+  } catch (error) {
+    console.error('写真削除エラー:', error);
+    return false;
+  }
+}
+
 // ローカル日報を保存（オフライン用）
 export interface LocalReport {
   localId: string;
@@ -71,6 +235,7 @@ export interface LocalReport {
   status: 'draft' | 'signed' | 'pending_upload';
   signatureLocalPath?: string;
   signatureFirebaseUrl?: string;
+  localPhotos?: LocalPhoto[];  // オフライン保存された写真
   createdAt: string;
   updatedAt: string;
 }
