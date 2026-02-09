@@ -17,6 +17,10 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import { Platform } from 'react-native';
+import messaging from '@react-native-firebase/messaging';
 import { auth, db } from '../config/firebase';
 
 interface UserInfo {
@@ -63,12 +67,82 @@ interface AuthProviderProps {
   fallback?: ReactNode;
 }
 
+// 通知のデフォルト設定
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
 export function AuthProvider({ children, fallback }: AuthProviderProps) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // プッシュ通知の許可をリクエストしてトークンを保存
+  async function registerForPushNotifications(userId: string, companyDocId: string): Promise<void> {
+    try {
+      // 物理デバイスでのみ動作
+      if (!Device.isDevice) {
+        console.log('プッシュ通知はシミュレーターでは利用できません');
+        return;
+      }
+
+      // iOSの場合、通知許可をリクエスト
+      if (Platform.OS === 'ios') {
+        const authStatus = await messaging().requestPermission();
+        const enabled =
+          authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+          authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+        if (!enabled) {
+          console.log('プッシュ通知の許可が拒否されました');
+          return;
+        }
+      }
+
+      // Androidの場合、通知チャンネルを設定
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'default',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#FF231F7C',
+        });
+      }
+
+      // FCMトークンを取得
+      const token = await messaging().getToken();
+
+      if (token) {
+        // Firestoreにトークンを保存
+        const userDocRef = doc(db, 'companies', companyDocId, 'users', userId);
+        await updateDoc(userDocRef, {
+          fcmToken: token,
+          fcmTokenUpdatedAt: serverTimestamp(),
+        });
+        console.log('FCMトークンを保存しました:', token.substring(0, 20) + '...');
+      }
+
+      // トークン更新時のリスナーを設定
+      messaging().onTokenRefresh(async (newToken) => {
+        console.log('FCMトークンが更新されました');
+        const userDocRef = doc(db, 'companies', companyDocId, 'users', userId);
+        await updateDoc(userDocRef, {
+          fcmToken: newToken,
+          fcmTokenUpdatedAt: serverTimestamp(),
+        });
+      });
+    } catch (error) {
+      console.error('プッシュ通知の登録エラー:', error);
+    }
+  }
 
   async function findCompanyByCode(companyCode: string): Promise<CompanyInfo> {
     const companiesRef = collection(db, 'companies');
@@ -125,6 +199,9 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
 
       await AsyncStorage.setItem('lastCompanyCode', companyCode);
 
+      // プッシュ通知を登録
+      await registerForPushNotifications(user.uid, company.id);
+
       return user;
     } catch (error) {
       await signOut(auth);
@@ -176,6 +253,9 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
             id: uid,
             ...userData,
           } as UserInfo);
+
+          // プッシュ通知を登録
+          await registerForPushNotifications(uid, companyDoc.id);
 
           return;
         }

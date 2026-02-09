@@ -15,7 +15,7 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log('バックグラウンドメッセージ受信:', payload);
 
-  const notificationTitle = payload.notification?.title || '作業日報アプリ';
+  const notificationTitle = payload.notification?.title || '作業日報アプリ -CDS-';
   const notificationOptions = {
     body: payload.notification?.body || '新しい通知があります',
     icon: '/icon-192.png',

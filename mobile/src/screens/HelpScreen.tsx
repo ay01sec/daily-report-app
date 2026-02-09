@@ -13,6 +13,8 @@ import Header from '../components/common/Header';
 type RootStackParamList = {
   Home: undefined;
   Help: undefined;
+  PrivacyPolicy: undefined;
+  TermsOfService: undefined;
 };
 
 type HelpScreenProps = {
@@ -29,7 +31,7 @@ export default function HelpScreen({ navigation }: HelpScreenProps) {
         </TouchableOpacity>
 
         <View style={styles.card}>
-          <Text style={styles.h1}>作業日報アプリ 操作マニュアル</Text>
+          <Text style={styles.h1}>作業日報アプリ -CDS- 操作マニュアル</Text>
 
           <Text style={styles.h2}>ログイン</Text>
           <Text style={styles.p}>
@@ -181,6 +183,24 @@ export default function HelpScreen({ navigation }: HelpScreenProps) {
           <Text style={styles.p}>
             提出済みの日報は修正できません。管理者に連絡して却下してもらい、却下後に修正・再提出してください。
           </Text>
+
+          <View style={styles.divider} />
+
+          <Text style={styles.h2}>法的情報</Text>
+          <TouchableOpacity
+            style={styles.legalLink}
+            onPress={() => navigation.navigate('PrivacyPolicy')}
+          >
+            <Text style={styles.legalLinkText}>プライバシーポリシー</Text>
+            <Text style={styles.legalLinkArrow}>&rarr;</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.legalLink}
+            onPress={() => navigation.navigate('TermsOfService')}
+          >
+            <Text style={styles.legalLinkText}>利用規約</Text>
+            <Text style={styles.legalLinkArrow}>&rarr;</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={{ height: 40 }} />
@@ -279,5 +299,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafb',
     fontWeight: '500',
     color: '#4b5563',
+  },
+  legalLink: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  legalLinkText: {
+    fontSize: 14,
+    color: '#2563eb',
+    fontWeight: '500',
+  },
+  legalLinkArrow: {
+    fontSize: 14,
+    color: '#2563eb',
   },
 });

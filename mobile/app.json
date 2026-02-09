@@ -15,10 +15,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.improvebiz.dailyreport",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSCameraUsageDescription": "日報に添付する写真を撮影するためにカメラを使用します",
         "NSPhotoLibraryUsageDescription": "日報に添付する写真を選択するために写真ライブラリにアクセスします",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -44,7 +48,9 @@
           "icon": "./assets/notification-icon.png",
           "color": "#2563eb"
         }
-      ]
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging"
     ],
     "extra": {
       "eas": {

@@ -178,8 +178,8 @@ exports.scheduledNotifications = onSchedule(
               await messaging.send({
                 token: fcmToken,
                 notification: {
-                  title: '日報未提出',
-                  body: '本日の日報がまだ提出されていません。',
+                  title: '作業日報アプリ -CDS-',
+                  body: '本日の作業日報がまだ送信されていません',
                 },
                 data: {
                   type: 'reminder',
@@ -352,7 +352,7 @@ exports.customNotifications = onSchedule(
             await messaging.send({
               token: fcmToken,
               notification: {
-                title: '作業日報アプリ',
+                title: '作業日報アプリ -CDS-',
                 body: notification.message,
               },
               data: {

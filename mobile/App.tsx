@@ -1,11 +1,17 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import messaging from '@react-native-firebase/messaging';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { OfflineStorageProvider } from './src/contexts/OfflineStorageContext';
 import AppNavigator from './src/navigation/AppNavigator';
+
+// バックグラウンドメッセージハンドラー（アプリがバックグラウンド/終了時に呼ばれる）
+messaging().setBackgroundMessageHandler(async (remoteMessage) => {
+  console.log('バックグラウンドで通知を受信:', remoteMessage);
+});
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -55,6 +61,16 @@ function LoadingScreen() {
 }
 
 export default function App() {
+  useEffect(() => {
+    // フォアグラウンドで通知を受信した時のハンドラー
+    const unsubscribe = messaging().onMessage(async (remoteMessage) => {
+      console.log('フォアグラウンドで通知を受信:', remoteMessage);
+      // フォアグラウンド時はアラートを表示するなど任意の処理
+    });
+
+    return unsubscribe;
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ErrorBoundary>

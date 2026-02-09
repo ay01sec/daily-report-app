@@ -1,4 +1,4 @@
-# 作業日報アプリ - React Native モバイル版
+# 作業日報アプリ -CDS- React Native モバイル版
 
 既存のWebアプリ（PWA）を完全にReact Nativeで再現したネイティブアプリです。
 

@@ -89,7 +89,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         <View style={styles.noticeContainer}>
           <Text style={styles.noticeTitle}>ご利用にあたって</Text>
           <Text style={styles.noticeText}>
-            このアプリは CONSTRUCTION DX SYSTEM の機能を使用します。
+            このアプリは「作業日報アプリ -CDS-」です。
           </Text>
           <Text style={styles.noticeText}>
             ご利用には下記サイトの「無料で始める」から企業登録を行い、ユーザー登録を完了させてください。

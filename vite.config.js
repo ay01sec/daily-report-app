@@ -11,7 +11,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'icon-192.png', 'icon-512.png'],
       manifest: {
-        name: '作業日報アプリ',
+        name: '作業日報アプリ -CDS-',
         short_name: '日報',
         description: '建設現場の作業日報を入力・送信するアプリ',
         start_url: '/',

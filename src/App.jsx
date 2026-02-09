@@ -8,6 +8,8 @@ import ReportNewPage from './pages/ReportNewPage';
 import ReportEditPage from './pages/ReportEditPage';
 import ReportDetailPage from './pages/ReportDetailPage';
 import HelpPage from './pages/HelpPage';
+import PrivacyPolicy from './pages/legal/PrivacyPolicy';
+import TermsOfService from './pages/legal/TermsOfService';
 
 export default function App() {
   return (
@@ -53,6 +55,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <HelpPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/legal/privacy"
+            element={
+              <ProtectedRoute>
+                <PrivacyPolicy />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/legal/terms"
+            element={
+              <ProtectedRoute>
+                <TermsOfService />
               </ProtectedRoute>
             }
           />

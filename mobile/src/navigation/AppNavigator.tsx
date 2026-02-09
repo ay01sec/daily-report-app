@@ -10,6 +10,8 @@ import ReportNewScreen from '../screens/ReportNewScreen';
 import ReportEditScreen from '../screens/ReportEditScreen';
 import ReportDetailScreen from '../screens/ReportDetailScreen';
 import HelpScreen from '../screens/HelpScreen';
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
+import TermsOfServiceScreen from '../screens/TermsOfServiceScreen';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -19,6 +21,8 @@ export type RootStackParamList = {
   ReportEdit: { id: string };
   ReportDetail: { id: string };
   Help: undefined;
+  PrivacyPolicy: undefined;
+  TermsOfService: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -36,6 +40,8 @@ export default function AppNavigator() {
             <Stack.Screen name="ReportEdit" component={ReportEditScreen} />
             <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
             <Stack.Screen name="Help" component={HelpScreen} />
+            <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+            <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} />
           </>
         ) : (
           <>

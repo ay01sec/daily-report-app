@@ -788,7 +788,7 @@ const statusConfig = {
 
 ```json
 {
-  "name": "作業日報アプリ",
+  "name": "作業日報アプリ -CDS-",
   "short_name": "日報",
   "description": "建設現場の作業日報を入力・送信するアプリ",
   "start_url": "/",

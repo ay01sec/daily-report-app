@@ -1,10 +1,10 @@
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import Header from '../components/common/Header';
-import manualContent from '../../MANUAL.md?raw';
+import Header from '../../components/common/Header';
+import content from '../../../docs/legal/TERMS_OF_SERVICE.md?raw';
 
-export default function HelpPage() {
+export default function TermsOfService() {
   const navigate = useNavigate();
 
   return (
@@ -35,28 +35,7 @@ export default function HelpPage() {
           prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:text-gray-700
           prose-hr:border-gray-200 prose-hr:my-6
         ">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{manualContent}</ReactMarkdown>
-        </div>
-
-        {/* 法的情報リンク */}
-        <div className="bg-white rounded-xl shadow-sm p-5 mt-4">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">法的情報</h2>
-          <div className="space-y-2">
-            <Link
-              to="/legal/privacy"
-              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <span className="text-sm text-blue-600 font-medium">プライバシーポリシー</span>
-              <span className="text-blue-600">&rarr;</span>
-            </Link>
-            <Link
-              to="/legal/terms"
-              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <span className="text-sm text-blue-600 font-medium">利用規約</span>
-              <span className="text-blue-600">&rarr;</span>
-            </Link>
-          </div>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
         </div>
       </main>
     </div>
