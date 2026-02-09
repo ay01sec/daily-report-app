@@ -7,6 +7,9 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "locales": {
+      "ja": "./locales/ja.json"
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -17,6 +20,8 @@
       "bundleIdentifier": "com.improvebiz.dailyreport",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
+        "CFBundleDevelopmentRegion": "ja",
+        "CFBundleLocalizations": ["ja"],
         "NSCameraUsageDescription": "日報に添付する写真を撮影するためにカメラを使用します",
         "NSPhotoLibraryUsageDescription": "日報に添付する写真を選択するために写真ライブラリにアクセスします",
         "ITSAppUsesNonExemptEncryption": false,

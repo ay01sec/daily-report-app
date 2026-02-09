@@ -1,0 +1,6 @@
+{
+  "CFBundleDisplayName": "作業日報",
+  "CFBundleName": "作業日報",
+  "NSCameraUsageDescription": "日報に添付する写真を撮影するためにカメラを使用します",
+  "NSPhotoLibraryUsageDescription": "日報に添付する写真を選択するために写真ライブラリにアクセスします"
+}

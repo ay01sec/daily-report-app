@@ -8,7 +8,6 @@ import {
   ScrollView,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Header from '../components/common/Header';
 
 type RootStackParamList = {
   Home: undefined;
@@ -24,11 +23,14 @@ type HelpScreenProps = {
 export default function HelpScreen({ navigation }: HelpScreenProps) {
   return (
     <SafeAreaView style={styles.container}>
-      <Header />
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backLink}>&larr; 戻る</Text>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Text style={styles.backButtonText}>&larr; 戻る</Text>
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>ヘルプ</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
 
         <View style={styles.card}>
           <Text style={styles.h1}>作業日報アプリ -CDS- 操作マニュアル</Text>
@@ -214,15 +216,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f9fafb',
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  backButton: {
+    paddingVertical: 4,
+    paddingRight: 8,
+  },
+  backButtonText: {
+    color: '#2563eb',
+    fontSize: 16,
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  headerSpacer: {
+    width: 60,
+  },
   content: {
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 16,
-  },
-  backLink: {
-    color: '#2563eb',
-    fontSize: 14,
-    marginBottom: 16,
   },
   card: {
     backgroundColor: '#fff',
