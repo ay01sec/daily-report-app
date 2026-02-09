@@ -9,7 +9,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import * as FileSystem from 'expo-file-system';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -41,10 +42,32 @@ export default function PhotoUploader({
     const storagePath = `companies/${companyId}/reports/${reportId || 'draft'}/photos/${fileName}`;
     const storageRef = ref(storage, storagePath);
 
-    const response = await fetch(uri);
+    // expo-file-systemを使用してファイルを読み込む
+    const fileInfo = await FileSystem.getInfoAsync(uri);
+    if (!fileInfo.exists) {
+      throw new Error('ファイルが見つかりません');
+    }
+
+    // ファイルをBase64で読み込む
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    // Base64からBlobを作成
+    const response = await fetch(`data:image/jpeg;base64,${base64}`);
     const blob = await response.blob();
 
-    await uploadBytes(storageRef, blob);
+    // アップロード
+    await new Promise<void>((resolve, reject) => {
+      const uploadTask = uploadBytesResumable(storageRef, blob);
+      uploadTask.on(
+        'state_changed',
+        null,
+        (error) => reject(error),
+        () => resolve()
+      );
+    });
+
     const url = await getDownloadURL(storageRef);
     return { url, path: storagePath, name: fileName };
   };
