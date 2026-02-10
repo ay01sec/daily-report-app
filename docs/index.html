@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ヘルプ - 作業日報アプリ -CDS-</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f9fafb;
+      color: #111827;
+      line-height: 1.6;
+    }
+    .header {
+      background-color: #2563eb;
+      color: white;
+      padding: 16px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    .page-title {
+      font-size: 24px;
+      font-weight: bold;
+      color: #111827;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+    }
+    h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #111827;
+      margin-top: 32px;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    h2:first-of-type {
+      margin-top: 0;
+    }
+    h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #374151;
+      margin-top: 20px;
+      margin-bottom: 8px;
+    }
+    p {
+      font-size: 15px;
+      color: #4b5563;
+      margin-bottom: 12px;
+    }
+    .note {
+      background-color: #eff6ff;
+      border-left: 4px solid #2563eb;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      margin: 12px 0;
+      font-size: 14px;
+      color: #1e40af;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid #e5e7eb;
+      padding: 10px 12px;
+      text-align: left;
+    }
+    th {
+      background-color: #f9fafb;
+      font-weight: 500;
+      color: #374151;
+    }
+    td {
+      color: #4b5563;
+    }
+    .nav-links {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+      flex-wrap: wrap;
+    }
+    .nav-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background-color: #f3f4f6;
+      color: #2563eb;
+      text-decoration: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-weight: 500;
+      transition: background-color 0.2s;
+    }
+    .nav-link:hover {
+      background-color: #e5e7eb;
+    }
+    .footer {
+      text-align: center;
+      padding: 24px;
+      color: #6b7280;
+      font-size: 14px;
+    }
+    .footer a {
+      color: #2563eb;
+      text-decoration: none;
+    }
+    ul {
+      margin: 8px 0 16px 20px;
+      color: #4b5563;
+    }
+    li {
+      margin-bottom: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>作業日報アプリ -CDS- ヘルプ</h1>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <h1 class="page-title">操作マニュアル</h1>
+
+      <h2>ログイン</h2>
+      <p>
+        1. 企業コード（8桁の数字）を入力します<br>
+        2. メールアドレスとパスワードを入力します<br>
+        3. 「ログイン」ボタンをタップします
+      </p>
+      <div class="note">
+        企業コードは前回入力した値が自動的に保存されます。パスワードを忘れた場合は「パスワードを忘れた方」をタップしてください。
+      </div>
+
+      <h2>ホーム画面</h2>
+      <p>ログイン後のメインページです。自分が作成した日報の一覧が表示されます。</p>
+      <ul>
+        <li><strong>月切替</strong>: 画面上部のドロップダウンで表示する月を変更できます</li>
+        <li><strong>日報一覧</strong>: 日付・現場名・ステータスがカード形式で表示されます</li>
+        <li><strong>新規作成</strong>: 「+ 新規作成」ボタンから新しい日報を作成できます</li>
+        <li><strong>更新</strong>: 画面を下に引っ張ると最新データに更新されます</li>
+      </ul>
+
+      <h3>ステータスの見方</h3>
+      <table>
+        <tr>
+          <th>色</th>
+          <th>ステータス</th>
+          <th>意味</th>
+        </tr>
+        <tr>
+          <td>グレー</td>
+          <td>下書き</td>
+          <td>保存済み。署名・提出がまだ</td>
+        </tr>
+        <tr>
+          <td>黄色</td>
+          <td>署名済み</td>
+          <td>署名を取得済み。まだ提出していない</td>
+        </tr>
+        <tr>
+          <td>青</td>
+          <td>提出済み</td>
+          <td>管理者に送信済み。承認待ち</td>
+        </tr>
+        <tr>
+          <td>緑</td>
+          <td>承認済み</td>
+          <td>管理者に承認された</td>
+        </tr>
+        <tr>
+          <td>赤</td>
+          <td>却下</td>
+          <td>差し戻し。修正が必要</td>
+        </tr>
+      </table>
+
+      <h2>日報を作成する</h2>
+      <h3>手順1: 日報の入力</h3>
+      <p>1. ホーム画面の「+ 新規作成」ボタンをタップします</p>
+      <p>2. 以下の項目を入力します：</p>
+      <ul>
+        <li><strong>作業日（必須）</strong>: 日付を選択します</li>
+        <li><strong>天候</strong>: 晴れ・曇り・雨・雪から選択</li>
+        <li><strong>現場名（必須）</strong>: 稼働中の現場から選択</li>
+        <li><strong>作業員（必須）</strong>: 1名以上の作業員情報を入力</li>
+        <li><strong>連絡事項</strong>: 管理者への連絡事項を記入</li>
+        <li><strong>写真</strong>: 現場の写真を最大3枚まで添付可能</li>
+      </ul>
+
+      <h3>手順2: 保存</h3>
+      <ul>
+        <li><strong>「下書き保存」</strong>: 下書きとして保存します。後から編集できます</li>
+        <li><strong>「元請サインへ進む」</strong>: 保存してから得意先の署名画面に進みます</li>
+      </ul>
+
+      <h2>得意先の署名を取得する</h2>
+      <p>
+        1. 「元請サインへ進む」をタップすると署名画面が表示されます<br>
+        2. スマートフォンを得意先の担当者にお渡しください<br>
+        3. 担当者に画面上に指で署名してもらいます<br>
+        4. 書き直す場合は「クリア」ボタンで消去できます<br>
+        5. 署名が完了したら「サイン完了」ボタンをタップします
+      </p>
+
+      <h2>日報を提出する</h2>
+      <p>
+        1. ホーム画面から「署名済み」の日報をタップします<br>
+        2. 編集画面で内容を確認します<br>
+        3. 「送信する」ボタンをタップします<br>
+        4. 確認ダイアログで「送信する」を選択します<br>
+        5. 提出が完了するとホーム画面に戻ります
+      </p>
+      <div class="note">
+        提出後は内容の変更ができなくなります。提出前に内容をよく確認してください。
+      </div>
+
+      <h2>PDF・QRコードを確認する</h2>
+      <p>承認済みの日報にはPDFとQRコードが生成されます。</p>
+      <p>
+        1. ホーム画面から「承認済み」の日報をタップします<br>
+        2. 詳細画面の下部に「PDF・QRコード」セクションが表示されます<br>
+        3. 「PDF表示」をタップすると日報のPDFを表示します<br>
+        4. 「QRコード」をタップするとPDFへのQRコードを表示します
+      </p>
+
+      <h2>オフラインでの利用</h2>
+      <p>インターネットに接続できない環境でも、下書きの保存ができます。</p>
+      <ul>
+        <li><strong>オフライン時</strong>: 画面上部に「オフラインモード」と表示されます</li>
+        <li><strong>下書き保存</strong>: 日報の入力内容は自動的にスマートフォンに保存されます</li>
+        <li><strong>自動同期</strong>: インターネットに接続されると、保存した下書きが自動的にサーバーに送信されます</li>
+      </ul>
+      <div class="note">
+        注意: 署名と提出にはインターネット接続が必要です。
+      </div>
+
+      <h2>よくある質問</h2>
+
+      <h3>パスワードを忘れた場合は？</h3>
+      <p>ログイン画面の「パスワードを忘れた方」からリセットメールを送信してください。</p>
+
+      <h3>企業コードがわからない場合は？</h3>
+      <p>管理者にお問い合わせください。</p>
+
+      <h3>現場が選択肢に表示されない場合は？</h3>
+      <p>管理者が現場を登録していない可能性があります。現場のステータスが「進行中」になっているか管理者に確認してください。</p>
+
+      <h3>日報を提出した後に修正したい場合は？</h3>
+      <p>提出済みの日報は修正できません。管理者に連絡して却下してもらい、却下後に修正・再提出してください。</p>
+
+      <h2>法的情報</h2>
+      <div class="nav-links">
+        <a href="privacy-policy.html" class="nav-link">プライバシーポリシー →</a>
+        <a href="terms-of-service.html" class="nav-link">利用規約 →</a>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>&copy; 2026 業務改善屋さん. All rights reserved.</p>
+      <p>お問い合わせ: <a href="mailto:y_akagi@improve-biz.com">y_akagi@improve-biz.com</a></p>
+    </div>
+  </div>
+</body>
+</html>
