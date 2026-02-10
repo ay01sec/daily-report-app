@@ -15,7 +15,7 @@ import {
   updateDoc,
   serverTimestamp
 } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { auth, db, requestNotificationPermission } from '../firebase';
 
 const AuthContext = createContext();
 
@@ -29,6 +29,56 @@ export function AuthProvider({ children }) {
   const [companyId, setCompanyId] = useState(null);
   const [companyInfo, setCompanyInfo] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // FCMトークンを登録
+  async function registerFCMToken(userId, companyDocId) {
+    console.log('=== PWA FCMトークン登録開始 ===');
+    console.log('userId:', userId);
+    console.log('companyDocId:', companyDocId);
+
+    try {
+      // ブラウザが通知をサポートしているか確認
+      if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) {
+        console.log('このブラウザは通知をサポートしていません');
+        return;
+      }
+
+      // 既に拒否されている場合はスキップ
+      if (Notification.permission === 'denied') {
+        console.log('通知が拒否されています');
+        return;
+      }
+
+      // FCMトークンを取得
+      console.log('FCMトークンを取得中...');
+      const token = await requestNotificationPermission();
+      console.log('FCMトークン取得:', token ? `${token.substring(0, 30)}...` : 'null');
+
+      if (token) {
+        // 現在のFirestoreのトークンを確認
+        const userDocRef = doc(db, 'companies', companyDocId, 'users', userId);
+        const userDocSnap = await getDoc(userDocRef);
+        const currentToken = userDocSnap.data()?.fcmToken;
+
+        if (currentToken === token) {
+          console.log('FCMトークンは既に最新です');
+        } else {
+          // Firestoreにトークンを保存
+          await updateDoc(userDocRef, {
+            fcmToken: token,
+            fcmTokenUpdatedAt: serverTimestamp(),
+          });
+          console.log('FCMトークンを保存しました（新規/更新）');
+        }
+      } else {
+        console.log('FCMトークンが取得できませんでした（許可されていないか、VAPIDキーが未設定）');
+      }
+
+      console.log('=== PWA FCMトークン登録完了 ===');
+    } catch (error) {
+      console.error('FCMトークン登録エラー:', error);
+    }
+  }
 
   // 企業コードで企業を検索（未認証でも可能）
   async function findCompanyByCode(companyCode) {
@@ -94,6 +144,9 @@ export function AuthProvider({ children }) {
       // 企業コードをローカルストレージに保存（次回ログイン時の利便性向上）
       localStorage.setItem('lastCompanyCode', companyCode);
 
+      // FCMトークンを登録
+      await registerFCMToken(user.uid, company.id);
+
       return user;
     } catch (error) {
       // エラー時はログアウトして再スロー
@@ -147,6 +200,9 @@ export function AuthProvider({ children }) {
             id: uid,
             ...userData
           });
+
+          // FCMトークンを登録（アプリ起動時）
+          await registerFCMToken(uid, companyDoc.id);
 
           return {
             companyId: companyDoc.id,

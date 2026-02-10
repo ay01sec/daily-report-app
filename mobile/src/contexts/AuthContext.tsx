@@ -87,16 +87,23 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
 
   // プッシュ通知の許可をリクエストしてトークンを保存
   async function registerForPushNotifications(userId: string, companyDocId: string): Promise<void> {
+    console.log('=== FCMトークン登録開始 ===');
+    console.log('userId:', userId);
+    console.log('companyDocId:', companyDocId);
+
     try {
       // 物理デバイスでのみ動作
       if (!Device.isDevice) {
         console.log('プッシュ通知はシミュレーターでは利用できません');
         return;
       }
+      console.log('デバイスチェック: OK（物理デバイス）');
 
       // iOSの場合、通知許可をリクエスト
       if (Platform.OS === 'ios') {
+        console.log('iOS: 通知許可をリクエスト中...');
         const authStatus = await messaging().requestPermission();
+        console.log('iOS: 通知許可ステータス:', authStatus);
         const enabled =
           authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
           authStatus === messaging.AuthorizationStatus.PROVISIONAL;
@@ -105,40 +112,58 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
           console.log('プッシュ通知の許可が拒否されました');
           return;
         }
+        console.log('iOS: 通知許可OK');
       }
 
       // Androidの場合、通知チャンネルを設定
       if (Platform.OS === 'android') {
+        console.log('Android: 通知チャンネルを設定中...');
         await Notifications.setNotificationChannelAsync('default', {
           name: 'default',
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: '#FF231F7C',
         });
+        console.log('Android: 通知チャンネル設定OK');
       }
 
       // FCMトークンを取得
+      console.log('FCMトークンを取得中...');
       const token = await messaging().getToken();
+      console.log('FCMトークン取得:', token ? `${token.substring(0, 30)}...` : 'null');
 
       if (token) {
-        // Firestoreにトークンを保存
+        // 現在のFirestoreのトークンを確認
         const userDocRef = doc(db, 'companies', companyDocId, 'users', userId);
-        await updateDoc(userDocRef, {
-          fcmToken: token,
-          fcmTokenUpdatedAt: serverTimestamp(),
-        });
-        console.log('FCMトークンを保存しました:', token.substring(0, 20) + '...');
+        const userDocSnap = await getDoc(userDocRef);
+        const currentToken = userDocSnap.data()?.fcmToken;
+
+        if (currentToken === token) {
+          console.log('FCMトークンは既に最新です');
+        } else {
+          // Firestoreにトークンを保存
+          await updateDoc(userDocRef, {
+            fcmToken: token,
+            fcmTokenUpdatedAt: serverTimestamp(),
+          });
+          console.log('FCMトークンを保存しました（新規/更新）');
+        }
+      } else {
+        console.log('FCMトークンが取得できませんでした');
       }
 
       // トークン更新時のリスナーを設定
       messaging().onTokenRefresh(async (newToken) => {
-        console.log('FCMトークンが更新されました');
+        console.log('FCMトークンが更新されました:', newToken.substring(0, 30) + '...');
         const userDocRef = doc(db, 'companies', companyDocId, 'users', userId);
         await updateDoc(userDocRef, {
           fcmToken: newToken,
           fcmTokenUpdatedAt: serverTimestamp(),
         });
+        console.log('更新されたFCMトークンを保存しました');
       });
+
+      console.log('=== FCMトークン登録完了 ===');
     } catch (error) {
       console.error('プッシュ通知の登録エラー:', error);
     }
