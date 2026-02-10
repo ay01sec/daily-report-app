@@ -33,7 +33,8 @@ export default function SignatureModal({
       const blob = await fetch(dataUrl).then((res) => res.blob());
 
       const timestamp = Date.now();
-      const storagePath = `signatures/${companyId}/${reportId}/${timestamp}.png`;
+      // 統一パス形式: companies/{companyId}/dailyReports/{reportId}/signatures/{timestamp}.png
+      const storagePath = `companies/${companyId}/dailyReports/${reportId}/signatures/${timestamp}.png`;
       const storageRef = ref(storage, storagePath);
 
       await uploadBytes(storageRef, blob);

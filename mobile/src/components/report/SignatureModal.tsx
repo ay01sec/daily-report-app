@@ -78,8 +78,8 @@ export default function SignatureModal({
           const blob = await response.blob();
 
           const timestamp = Date.now();
-          // 写真と同じパス構造を使用（Firebase Storage rulesに準拠）
-          const storagePath = `companies/${companyId}/reports/${reportId}/photos/signature_${timestamp}.png`;
+          // 統一パス形式: companies/{companyId}/dailyReports/{reportId}/signatures/{timestamp}.png
+          const storagePath = `companies/${companyId}/dailyReports/${reportId}/signatures/${timestamp}.png`;
           const storageRef = ref(storage, storagePath);
 
           await uploadBytes(storageRef, blob);
