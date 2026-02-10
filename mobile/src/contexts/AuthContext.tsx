@@ -181,7 +181,8 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
         throw new Error('このアカウントは無効化されています');
       }
 
-      if (!['admin', 'manager'].includes(userData.role)) {
+      // site_manager以上のロールでログイン可能（manager は旧ロール名で互換性維持）
+      if (!['admin', 'office', 'manager', 'site_manager'].includes(userData.role)) {
         await signOut(auth);
         throw new Error('日報アプリへのアクセス権限がありません');
       }
@@ -236,7 +237,8 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
             throw new Error('このアカウントは無効化されています');
           }
 
-          if (!['admin', 'manager'].includes(userData.role)) {
+          // site_manager以上のロールでログイン可能（manager は旧ロール名で互換性維持）
+          if (!['admin', 'office', 'manager', 'site_manager'].includes(userData.role)) {
             throw new Error('日報アプリへのアクセス権限がありません');
           }
 
