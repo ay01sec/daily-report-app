@@ -51,8 +51,13 @@ jobs:
           BASE_URL=http://localhost:5173
           EOF
 
+      - name: Build application
+        run: npm run build
+
       - name: Run E2E tests
         run: npx playwright test --project=${{ matrix.project }}
+        env:
+          BASE_URL: http://localhost:5173
 
       - name: Upload test report
         uses: actions/upload-artifact@v4
