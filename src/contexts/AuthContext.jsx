@@ -123,7 +123,7 @@ export function AuthProvider({ children }) {
         throw new Error('このアカウントは無効化されています');
       }
 
-      if (!['admin', 'manager'].includes(userData.role)) {
+      if (!['admin', 'office', 'manager', 'site_manager'].includes(userData.role)) {
         await signOut(auth);
         throw new Error('日報アプリへのアクセス権限がありません');
       }
@@ -183,7 +183,7 @@ export function AuthProvider({ children }) {
             throw new Error('このアカウントは無効化されています');
           }
 
-          if (!['admin', 'manager'].includes(userData.role)) {
+          if (!['admin', 'office', 'manager', 'site_manager'].includes(userData.role)) {
             throw new Error('日報アプリへのアクセス権限がありません');
           }
 
@@ -224,7 +224,7 @@ export function AuthProvider({ children }) {
   }
 
   function isManagerOrAbove() {
-    return userInfo?.role === 'admin' || userInfo?.role === 'manager';
+    return ['admin', 'office', 'manager', 'site_manager'].includes(userInfo?.role);
   }
 
   useEffect(() => {

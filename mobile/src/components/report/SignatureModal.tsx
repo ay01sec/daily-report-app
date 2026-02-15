@@ -10,9 +10,9 @@ import {
 } from 'react-native';
 import SignatureScreen, { SignatureViewRef } from 'react-native-signature-canvas';
 import NetInfo from '@react-native-community/netinfo';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import storage from '@react-native-firebase/storage';
 import { doc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
-import { db, storage } from '../../config/firebase';
+import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatDateWithDay } from '../../utils/dateUtils';
 import {
@@ -74,16 +74,15 @@ export default function SignatureModal({
       if (isOnline && reportId) {
         // オンライン：Firebaseにアップロード
         try {
-          const response = await fetch(signature);
-          const blob = await response.blob();
-
           const timestamp = Date.now();
-          // 統一パス形式: companies/{companyId}/dailyReports/{reportId}/signatures/{timestamp}.png
-          const storagePath = `companies/${companyId}/dailyReports/${reportId}/signatures/${timestamp}.png`;
-          const storageRef = ref(storage, storagePath);
+          // Storageルールに合わせたパス: signatures/{companyId}/{reportId}/{timestamp}.png
+          const storagePath = `signatures/${companyId}/${reportId}/${timestamp}.png`;
+          const storageRef = storage().ref(storagePath);
 
-          await uploadBytes(storageRef, blob);
-          const downloadUrl = await getDownloadURL(storageRef);
+          // base64 data URLからbase64部分を抽出してアップロード
+          const base64Data = signature.replace(/^data:image\/\w+;base64,/, '');
+          await storageRef.putString(base64Data, 'base64', { contentType: 'image/png' });
+          const downloadUrl = await storageRef.getDownloadURL();
 
           await updateDoc(doc(db, 'companies', companyId!, 'dailyReports', reportId), {
             'clientSignature.imageUrl': downloadUrl,

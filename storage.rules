@@ -1,34 +1,51 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // 署名画像
-    match /signatures/{companyId}/{reportId}/{fileName} {
-      // 読み取り：認証済みユーザー
-      allow read: if request.auth != null;
 
-      // 書き込み：認証済みユーザー（同一企業）
+    // ========== 署名画像 ==========
+    // パス: signatures/{companyId}/{reportId}/{fileName}
+    match /signatures/{companyId}/{reportId}/{fileName} {
+      // 読み取り：認証済みで同一企業のユーザー
+      allow read: if request.auth != null
+        && request.auth.token.companyId == companyId;
+
+      // 書き込み：認証済みで同一企業のユーザー + サイズ・形式制限
       allow write: if request.auth != null
+        && request.auth.token.companyId == companyId
         && request.resource.size < 5 * 1024 * 1024  // 5MB制限
         && request.resource.contentType.matches('image/.*');
 
-      // 削除：認証済みユーザー
-      allow delete: if request.auth != null;
+      // 削除：認証済みで同一企業のユーザー
+      allow delete: if request.auth != null
+        && request.auth.token.companyId == companyId;
     }
 
-    // 日報写真
+    // ========== 日報写真 ==========
+    // パス: companies/{companyId}/reports/{reportId}/photos/{fileName}
     match /companies/{companyId}/reports/{reportId}/photos/{fileName} {
-      allow read: if request.auth != null;
+      // 読み取り：認証済みで同一企業のユーザー
+      allow read: if request.auth != null
+        && request.auth.token.companyId == companyId;
+
+      // 書き込み：認証済みで同一企業のユーザー + サイズ・形式制限
       allow write: if request.auth != null
-        && request.resource.size < 10 * 1024 * 1024
+        && request.auth.token.companyId == companyId
+        && request.resource.size < 10 * 1024 * 1024  // 10MB制限
         && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null;
+
+      // 削除：認証済みで同一企業のユーザー
+      allow delete: if request.auth != null
+        && request.auth.token.companyId == companyId;
     }
 
-    // PDF・QRコード（公開）
+    // ========== PDF・QRコード（公開） ==========
+    // パス: companies/{companyId}/reports/{reportId}/{fileName}
+    // ※ 上記photos配下とは別パスなので競合しない
     match /companies/{companyId}/reports/{reportId}/{fileName} {
-      // 読み取り：誰でもOK（公開ファイル）
+      // 読み取り：誰でもOK（URLを知っている人のみアクセス可能）
       allow read: if true;
-      // 書き込み：Cloud Functionsのサービスアカウントのみ（Admin SDKから）
+      // 書き込み：Cloud Functions（Admin SDK）のみ許可
+      // Admin SDKはルールをバイパスするため、クライアントからの書き込みは拒否
       allow write: if false;
     }
   }

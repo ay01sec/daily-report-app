@@ -1,0 +1,63 @@
+{
+  "project_info": {
+    "project_number": "1072304386771",
+    "project_id": "labormanagement-20260202",
+    "storage_bucket": "labormanagement-20260202.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1072304386771:android:bd5d7cf42e3083bd111a26",
+        "android_client_info": {
+          "package_name": "com.improvebiz.dailyreport"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1072304386771-c2en2ml22q96fuevm4n4rvgftpfuegd4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.improvebiz.dailyreport",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "1072304386771-j0it2uk0bnakd4vmpcbf934p1hqbi5rs.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.improvebiz.dailyreport",
+            "certificate_hash": "e3f86406051f41217fa5943c1c8c2132a80656fe"
+          }
+        },
+        {
+          "client_id": "1072304386771-1gljmgq8b61e07er4uedru092kl4f3hc.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBWmMgGDfSQ9p4p3L7FAWTc-QHnVyWfygA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1072304386771-1gljmgq8b61e07er4uedru092kl4f3hc.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1072304386771-ijcofvgopfvsahfovuleh25lu5evb3o0.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.improvebiz.dailyreport",
+                "app_store_id": "6758916108"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

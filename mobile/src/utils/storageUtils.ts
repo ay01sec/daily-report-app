@@ -304,6 +304,34 @@ export async function getPendingUploadReports(): Promise<LocalReport[]> {
   return reports.filter(r => r.status === 'signed' && !r.signatureFirebaseUrl);
 }
 
+// 全ローカル日報を削除（デバッグ用）
+export async function clearAllLocalReports(): Promise<boolean> {
+  try {
+    const reports = await getLocalReports();
+
+    // 全ての署名画像と写真を削除
+    for (const report of reports) {
+      if (report.signatureLocalPath) {
+        await deleteSignatureLocally(report.signatureLocalPath);
+      }
+      if (report.localPhotos) {
+        for (const photo of report.localPhotos) {
+          if (photo.localPath) {
+            await deletePhotoLocally(photo.localPath);
+          }
+        }
+      }
+    }
+
+    await AsyncStorage.setItem(LOCAL_REPORTS_KEY, JSON.stringify([]));
+    console.log('[Debug] 全ローカル日報を削除しました');
+    return true;
+  } catch (error) {
+    console.error('全ローカル日報削除エラー:', error);
+    return false;
+  }
+}
+
 export async function saveDraft(reportId: string, data: any): Promise<string | null> {
   try {
     const key = reportId ? `${DRAFT_PREFIX}${reportId}` : `${DRAFT_PREFIX}new_${Date.now()}`;

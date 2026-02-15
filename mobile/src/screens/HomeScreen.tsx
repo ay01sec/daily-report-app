@@ -6,6 +6,7 @@ import {
   FlatList,
   StyleSheet,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Picker } from '@react-native-picker/picker';
@@ -110,7 +111,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const { prefetching, prefetched, sitesCount, employeesCount } = usePrefetchMasterData();
 
   // オフライン同期管理
-  const { online, syncing, pendingCount, syncLocalReports } = useOfflineStorage();
+  const { online, syncing, pendingCount, syncLocalReports, clearAllLocalData } = useOfflineStorage();
 
   const fetchReports = useCallback(async () => {
     if (!companyId || !currentUser) return;
@@ -245,6 +246,35 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             {!online && (
               <Text style={styles.bannerSyncText}>オフラインのため同期できません</Text>
             )}
+          </TouchableOpacity>
+        )}
+
+        {/* デバッグ: ローカルキャッシュ削除ボタン（テスト後に __DEV__ && に戻す） */}
+        {(
+          <TouchableOpacity
+            style={styles.debugButton}
+            onPress={() => {
+              Alert.alert(
+                'ローカルデータ削除',
+                'キャッシュされた全ての日報データを削除しますか？（Firebaseのデータは削除されません）',
+                [
+                  { text: 'キャンセル', style: 'cancel' },
+                  {
+                    text: '削除',
+                    style: 'destructive',
+                    onPress: async () => {
+                      const result = await clearAllLocalData();
+                      Alert.alert(
+                        result ? '削除完了' : 'エラー',
+                        result ? 'ローカルデータを削除しました' : '削除に失敗しました'
+                      );
+                    },
+                  },
+                ]
+              );
+            }}
+          >
+            <Text style={styles.debugButtonText}>🗑 ローカルキャッシュを削除 (DEV)</Text>
           </TouchableOpacity>
         )}
 
@@ -397,6 +427,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8b5cf6',
     marginTop: 4,
+  },
+  debugButton: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  debugButtonText: {
+    color: '#dc2626',
+    fontWeight: '500',
+    fontSize: 14,
   },
   rejectedBanner: {
     backgroundColor: '#fef2f2',

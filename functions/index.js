@@ -15,6 +15,100 @@ initializeApp();
 
 const db = getFirestore();
 const messaging = getMessaging();
+const auth = getAuth();
+
+// ============================================================
+// Custom Claims for Storage Security
+// ============================================================
+
+/**
+ * ユーザーが企業に追加された時、companyIdをCustom Claimに設定
+ */
+exports.onUserAddedToCompany = onDocumentCreated(
+  {
+    document: 'companies/{companyId}/users/{userId}',
+    region: 'asia-northeast1',
+  },
+  async (event) => {
+    const companyId = event.params.companyId;
+    const userId = event.params.userId;
+
+    try {
+      // Custom ClaimにcompanyIdを設定
+      await auth.setCustomUserClaims(userId, { companyId });
+      console.log(`Custom Claim設定完了: userId=${userId}, companyId=${companyId}`);
+
+      // ユーザードキュメントにclaimsUpdatedAtを記録（クライアント側でトークン更新の判断に使用）
+      await db.collection('companies').doc(companyId)
+        .collection('users').doc(userId)
+        .update({ claimsUpdatedAt: Timestamp.now() });
+
+    } catch (error) {
+      console.error('Custom Claim設定エラー:', error);
+    }
+  }
+);
+
+/**
+ * 既存ユーザー向け：companyIdをCustom Claimに設定（Callable Function）
+ * ログイン後にクライアントから呼び出す
+ */
+exports.setCompanyClaim = onCall(
+  {
+    region: 'asia-northeast1',
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', '認証が必要です');
+    }
+
+    const userId = request.auth.uid;
+
+    try {
+      // ユーザーが所属する企業を検索
+      const companiesSnapshot = await db.collection('companies').get();
+
+      let foundCompanyId = null;
+      for (const companyDoc of companiesSnapshot.docs) {
+        const userDoc = await companyDoc.ref
+          .collection('users')
+          .doc(userId)
+          .get();
+
+        if (userDoc.exists) {
+          foundCompanyId = companyDoc.id;
+          break;
+        }
+      }
+
+      if (!foundCompanyId) {
+        throw new HttpsError('not-found', '所属企業が見つかりません');
+      }
+
+      // 既存のClaimを確認
+      const user = await auth.getUser(userId);
+      const currentClaims = user.customClaims || {};
+
+      // 既に正しいcompanyIdが設定されている場合はスキップ
+      if (currentClaims.companyId === foundCompanyId) {
+        console.log(`Custom Claim既存: userId=${userId}, companyId=${foundCompanyId}`);
+        return { companyId: foundCompanyId, updated: false };
+      }
+
+      // Custom Claimを設定
+      await auth.setCustomUserClaims(userId, { ...currentClaims, companyId: foundCompanyId });
+      console.log(`Custom Claim更新: userId=${userId}, companyId=${foundCompanyId}`);
+
+      return { companyId: foundCompanyId, updated: true };
+    } catch (error) {
+      console.error('setCompanyClaim エラー:', error);
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      throw new HttpsError('internal', 'Custom Claim設定に失敗しました');
+    }
+  }
+);
 
 /**
  * 企業作成時に自動で連番の企業IDを付与

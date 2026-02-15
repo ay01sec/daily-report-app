@@ -2,9 +2,9 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import debounce from 'lodash/debounce';
 import { Alert, BackHandler } from 'react-native';
 import { collection, addDoc, doc, updateDoc, deleteDoc, getDoc, getDocs, query, where, serverTimestamp, Timestamp } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import storage from '@react-native-firebase/storage';
 import NetInfo from '@react-native-community/netinfo';
-import { db, storage } from '../config/firebase';
+import { db } from '../config/firebase';
 import { useAuth } from './AuthContext';
 import {
   saveDraft,
@@ -18,6 +18,7 @@ import {
   deleteLocalReport,
   loadSignatureLocally,
   loadPhotoLocally,
+  clearAllLocalReports,
   LocalReport,
   LocalPhoto,
 } from '../utils/storageUtils';
@@ -33,6 +34,7 @@ interface OfflineStorageContextValue {
   queueForSync: (reportData: any) => Promise<string | null>;
   syncPendingReports: () => Promise<void>;
   syncLocalReports: () => Promise<void>;
+  clearAllLocalData: () => Promise<boolean>;
 }
 
 const OfflineStorageContext = createContext<OfflineStorageContextValue | undefined>(undefined);
@@ -124,25 +126,15 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
       }
 
       const storagePath = `companies/${companyId}/reports/${reportId}/photos/${localPhoto.fileName}`;
-      const storageRef = ref(storage, storagePath);
+      const storageRef = storage().ref(storagePath);
 
-      const response = await fetch(base64);
-      const blob = await response.blob();
+      // base64 data URLからbase64部分を抽出してアップロード
+      const base64Data = base64.replace(/^data:image\/\w+;base64,/, '');
+      console.log(`[Sync] 写真アップロード中: ${localPhoto.fileName}`);
+      await storageRef.putString(base64Data, 'base64', { contentType: 'image/png' });
+      console.log(`[Sync] 写真アップロード完了: ${localPhoto.fileName}`);
 
-      await new Promise<void>((resolve, reject) => {
-        const uploadTask = uploadBytesResumable(storageRef, blob);
-        uploadTask.on(
-          'state_changed',
-          (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            console.log(`[Sync] 写真アップロード進捗: ${progress.toFixed(1)}%`);
-          },
-          (error) => reject(error),
-          () => resolve()
-        );
-      });
-
-      const firebaseUrl = await getDownloadURL(storageRef);
+      const firebaseUrl = await storageRef.getDownloadURL();
       return { firebaseUrl, firebasePath: storagePath };
     } catch (error) {
       console.error('写真アップロードエラー:', error);
@@ -161,7 +153,10 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
     console.log('[Sync] ロック取得');
 
     const netState = await NetInfo.fetch();
-    if (!netState.isConnected || !netState.isInternetReachable || !companyId) {
+    // isInternetReachable が null の場合は isConnected のみで判定
+    const isOnline = netState.isConnected === true &&
+      (netState.isInternetReachable === true || netState.isInternetReachable === null);
+    if (!isOnline || !companyId) {
       console.log('[Sync] オフラインまたはcompanyIdがないためスキップ');
       isSyncingRef.current = false;
       setSyncing(false);
@@ -392,26 +387,18 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
               }
               console.log(`[Sync] 署名Base64読み込み完了: ${signatureBase64.substring(0, 50)}...`);
 
-              const fileName = `companies/${companyId}/reports/${firebaseReportId}/photos/signature_${Date.now()}.png`;
-              const storageRef = ref(storage, fileName);
+              // Storageルールに合わせたパス: signatures/{companyId}/{reportId}/{timestamp}.png
+              const timestamp = Date.now();
+              const fileName = `signatures/${companyId}/${firebaseReportId}/signature_${timestamp}.png`;
+              const storageRef = storage().ref(fileName);
 
-              const response = await fetch(signatureBase64);
-              const blob = await response.blob();
+              // base64 data URLからbase64部分を抽出してアップロード
+              const base64Data = signatureBase64.replace(/^data:image\/\w+;base64,/, '');
+              console.log(`[Sync] 署名アップロード中...`);
+              await storageRef.putString(base64Data, 'base64', { contentType: 'image/png' });
+              console.log(`[Sync] 署名アップロード完了`);
 
-              await new Promise<void>((resolve, reject) => {
-                const uploadTask = uploadBytesResumable(storageRef, blob);
-                uploadTask.on(
-                  'state_changed',
-                  (snapshot) => {
-                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                    console.log(`[Sync] 署名アップロード進捗: ${progress.toFixed(1)}%`);
-                  },
-                  (error) => reject(error),
-                  () => resolve()
-                );
-              });
-
-              const signatureUrl = await getDownloadURL(storageRef);
+              const signatureUrl = await storageRef.getDownloadURL();
 
               await updateDoc(doc(db, 'companies', companyId, 'dailyReports', firebaseReportId!), {
                 'clientSignature.imageUrl': signatureUrl,
@@ -572,7 +559,10 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
     updatePendingCount();
 
     const unsubscribe = NetInfo.addEventListener((state) => {
-      const isConnected = !!(state.isConnected && state.isInternetReachable);
+      // isInternetReachable が null の場合は isConnected のみで判定
+      // Android では isInternetReachable が null を返すことがある
+      const isConnected = state.isConnected === true &&
+        (state.isInternetReachable === true || state.isInternetReachable === null);
       debouncedNetworkHandler(isConnected);
     });
 
@@ -600,6 +590,15 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
     return id;
   }, [updatePendingCount]);
 
+  const clearAllLocalDataCallback = useCallback(async () => {
+    const result = await clearAllLocalReports();
+    if (result) {
+      processedLocalIdsRef.current.clear();
+      await updatePendingCount();
+    }
+    return result;
+  }, [updatePendingCount]);
+
   const value: OfflineStorageContextValue = {
     online,
     syncing,
@@ -611,6 +610,7 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
     queueForSync: queueForSyncCallback,
     syncPendingReports,
     syncLocalReports,
+    clearAllLocalData: clearAllLocalDataCallback,
   };
 
   return (

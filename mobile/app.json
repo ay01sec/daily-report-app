@@ -18,7 +18,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.improvebiz.dailyreport",
-      "buildNumber": "20",
+      "buildNumber": "28",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "CFBundleDevelopmentRegion": "ja",
@@ -39,6 +39,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.improvebiz.dailyreport",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -56,7 +57,17 @@
         }
       ],
       "@react-native-firebase/app",
-      "@react-native-firebase/messaging"
+      "@react-native-firebase/messaging",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static",
+            "deploymentTarget": "15.1",
+            "forceStaticLinking": ["RNFBApp", "RNFBAuth", "RNFBMessaging", "RNFBStorage"]
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {

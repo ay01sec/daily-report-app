@@ -1,11 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import {
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  sendPasswordResetEmail,
-  User,
-} from 'firebase/auth';
+import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import functions, { firebase as firebaseFunctions } from '@react-native-firebase/functions';
 import {
   collection,
   getDocs,
@@ -21,7 +16,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
-import { auth, db } from '../config/firebase';
+import { db } from '../config/firebase';
 
 interface UserInfo {
   id: string;
@@ -40,11 +35,11 @@ interface CompanyInfo {
 }
 
 interface AuthContextType {
-  currentUser: User | null;
+  currentUser: FirebaseAuthTypes.User | null;
   userInfo: UserInfo | null;
   companyId: string | null;
   companyInfo: CompanyInfo | null;
-  login: (companyCode: string, email: string, password: string) => Promise<User>;
+  login: (companyCode: string, email: string, password: string) => Promise<FirebaseAuthTypes.User>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   isAdmin: () => boolean;
@@ -79,7 +74,7 @@ Notifications.setNotificationHandler({
 });
 
 export function AuthProvider({ children, fallback }: AuthProviderProps) {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<FirebaseAuthTypes.User | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
@@ -169,6 +164,25 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
     }
   }
 
+  // Custom Claimを設定するヘルパー関数（asia-northeast1リージョン指定）
+  async function ensureCustomClaim(user: FirebaseAuthTypes.User): Promise<void> {
+    try {
+      // asia-northeast1リージョンを指定（正しい構文）
+      const functionsAsia = firebaseFunctions.app().functions('asia-northeast1');
+      const setClaimFn = functionsAsia.httpsCallable('setCompanyClaim');
+      const result = await setClaimFn({});
+      console.log('Custom Claim設定結果:', result.data);
+
+      // トークンを強制リフレッシュして新しいClaimを取得
+      if ((result.data as any)?.updated) {
+        await user.getIdToken(true);
+        console.log('IDトークンをリフレッシュしました');
+      }
+    } catch (claimError) {
+      console.warn('Custom Claim設定に失敗:', claimError);
+    }
+  }
+
   async function findCompanyByCode(companyCode: string): Promise<CompanyInfo> {
     const companiesRef = collection(db, 'companies');
     const q = query(companiesRef, where('companyCode', '==', companyCode));
@@ -185,9 +199,9 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
     } as CompanyInfo;
   }
 
-  async function login(companyCode: string, email: string, password: string): Promise<User> {
+  async function login(companyCode: string, email: string, password: string): Promise<FirebaseAuthTypes.User> {
     const company = await findCompanyByCode(companyCode);
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const userCredential = await auth().signInWithEmailAndPassword(email, password);
     const user = userCredential.user;
 
     try {
@@ -195,20 +209,20 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
       const userDocSnap = await getDoc(userDocRef);
 
       if (!userDocSnap.exists()) {
-        await signOut(auth);
+        await auth().signOut();
         throw new Error('この企業IDに登録されていないユーザーです');
       }
 
       const userData = userDocSnap.data();
 
       if (!userData.isActive) {
-        await signOut(auth);
+        await auth().signOut();
         throw new Error('このアカウントは無効化されています');
       }
 
       // site_manager以上のロールでログイン可能（manager は旧ロール名で互換性維持）
       if (!['admin', 'office', 'manager', 'site_manager'].includes(userData.role)) {
-        await signOut(auth);
+        await auth().signOut();
         throw new Error('日報アプリへのアクセス権限がありません');
       }
 
@@ -225,25 +239,28 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
 
       await AsyncStorage.setItem('lastCompanyCode', companyCode);
 
+      // Custom Claimを設定（Storage Securityのため）
+      await ensureCustomClaim(user);
+
       // プッシュ通知を登録
       await registerForPushNotifications(user.uid, company.id);
 
       return user;
     } catch (error) {
-      await signOut(auth);
+      await auth().signOut();
       throw error;
     }
   }
 
   async function resetPassword(email: string): Promise<void> {
-    await sendPasswordResetEmail(auth, email);
+    await auth().sendPasswordResetEmail(email);
   }
 
   async function logout(): Promise<void> {
     setUserInfo(null);
     setCompanyId(null);
     setCompanyInfo(null);
-    await signOut(auth);
+    await auth().signOut();
   }
 
   async function fetchUserInfo(uid: string): Promise<void> {
@@ -281,6 +298,12 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
             ...userData,
           } as UserInfo);
 
+          // Custom Claimを設定（Storage Securityのため）
+          const currentUser = auth().currentUser;
+          if (currentUser) {
+            await ensureCustomClaim(currentUser);
+          }
+
           // プッシュ通知を登録
           await registerForPushNotifications(uid, companyDoc.id);
 
@@ -304,7 +327,7 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
   }
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = auth().onAuthStateChanged(async (user) => {
       setCurrentUser(user);
 
       if (user) {

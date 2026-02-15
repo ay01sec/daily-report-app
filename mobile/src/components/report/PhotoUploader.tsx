@@ -11,8 +11,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import NetInfo from '@react-native-community/netinfo';
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
-import { storage } from '../../config/firebase';
+import storage from '@react-native-firebase/storage';
 import { useAuth } from '../../contexts/AuthContext';
 import { savePhotoLocally, deletePhotoLocally, LocalPhoto } from '../../utils/storageUtils';
 
@@ -66,7 +65,7 @@ export default function PhotoUploader({
       const storagePath = `companies/${companyId}/reports/${reportId || 'draft'}/photos/${fileName}`;
       logs.push(`[3] Storage path: ${storagePath}`);
 
-      const storageRef = ref(storage, storagePath);
+      const storageRef = storage().ref(storagePath);
       logs.push(`[4] Storage ref created`);
 
       // expo-file-systemを使用してファイルを読み込む
@@ -84,36 +83,13 @@ export default function PhotoUploader({
       });
       logs.push(`[7] Base64 length: ${base64.length}`);
 
-      // Base64からBlobを作成
-      logs.push(`[8] Creating blob from base64...`);
-      const response = await fetch(`data:image/jpeg;base64,${base64}`);
-      const blob = await response.blob();
-      logs.push(`[9] Blob created: size=${blob.size}, type=${blob.type}`);
+      // React Native Firebase: putStringでBase64アップロード
+      logs.push(`[8] Starting upload to Firebase Storage...`);
+      await storageRef.putString(base64, 'base64', { contentType: 'image/jpeg' });
+      logs.push(`[9] Upload completed!`);
 
-      // アップロード
-      logs.push(`[10] Starting upload to Firebase Storage...`);
-      await new Promise<void>((resolve, reject) => {
-        const uploadTask = uploadBytesResumable(storageRef, blob);
-        uploadTask.on(
-          'state_changed',
-          (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            logs.push(`[11] Upload progress: ${progress.toFixed(1)}%`);
-          },
-          (error) => {
-            logs.push(`[ERROR] Upload failed: ${error.code} - ${error.message}`);
-            setDebugInfo(logs.join('\n'));
-            reject(error);
-          },
-          () => {
-            logs.push(`[12] Upload completed!`);
-            resolve();
-          }
-        );
-      });
-
-      const url = await getDownloadURL(storageRef);
-      logs.push(`[13] Download URL obtained`);
+      const url = await storageRef.getDownloadURL();
+      logs.push(`[10] Download URL obtained`);
       setDebugInfo(null); // 成功したらデバッグ情報をクリア
       return { url, path: storagePath, name: fileName };
     } catch (error: any) {
@@ -260,8 +236,8 @@ export default function PhotoUploader({
         return;
       } else if (photo.path) {
         // Firebase Storage から削除
-        const storageRef = ref(storage, photo.path);
-        await deleteObject(storageRef).catch(() => {});
+        const storageRef = storage().ref(photo.path);
+        await storageRef.delete().catch(() => {});
       }
     } catch (e) {
       console.warn('写真削除エラー:', e);
