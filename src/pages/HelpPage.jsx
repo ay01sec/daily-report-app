@@ -1,23 +1,28 @@
 import { useNavigate, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/common/Header';
+import PublicHeader from '../components/common/PublicHeader';
 import manualContent from '../../MANUAL.md?raw';
 
 export default function HelpPage() {
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
+      {currentUser ? <Header /> : <PublicHeader />}
 
       <main className="max-w-2xl mx-auto px-4 py-6">
-        <button
-          onClick={() => navigate(-1)}
-          className="text-blue-600 text-sm mb-4 inline-block"
-        >
-          &larr; 戻る
-        </button>
+        {currentUser && (
+          <button
+            onClick={() => navigate(-1)}
+            className="text-blue-600 text-sm mb-4 inline-block"
+          >
+            &larr; 戻る
+          </button>
+        )}
 
         <div className="bg-white rounded-xl shadow-sm p-5 prose prose-sm max-w-none
           prose-headings:text-gray-800

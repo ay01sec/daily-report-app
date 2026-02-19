@@ -50,30 +50,10 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/help"
-            element={
-              <ProtectedRoute>
-                <HelpPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/legal/privacy"
-            element={
-              <ProtectedRoute>
-                <PrivacyPolicy />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/legal/terms"
-            element={
-              <ProtectedRoute>
-                <TermsOfService />
-              </ProtectedRoute>
-            }
-          />
+          {/* 公開ページ（認証不要） */}
+          <Route path="/help" element={<HelpPage />} />
+          <Route path="/legal/privacy" element={<PrivacyPolicy />} />
+          <Route path="/legal/terms" element={<TermsOfService />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
