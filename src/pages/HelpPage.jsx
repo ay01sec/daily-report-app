@@ -34,10 +34,10 @@ export default function HelpPage() {
             <div className="flex items-center mb-2">
               <span className="text-sm font-medium text-gray-600 w-24">メール:</span>
               <a
-                href="mailto:support@improve-biz.com"
+                href="mailto:y_akagi@improve-biz.com"
                 className="text-blue-600 hover:text-blue-800 font-medium"
               >
-                support@improve-biz.com
+                y_akagi@improve-biz.com
               </a>
             </div>
             <div className="flex items-start">
