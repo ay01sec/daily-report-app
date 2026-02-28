@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Linking,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -92,15 +91,8 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             このアプリは「作業日報アプリ -CDS-」です。
           </Text>
           <Text style={styles.noticeText}>
-            ご利用には下記サイトの「無料で始める」から企業登録を行い、ユーザー登録を完了させてください。
+            ご利用には企業の管理者によるアカウント登録が必要です。アカウントをお持ちでない場合は、所属企業の管理者にお問い合わせください。
           </Text>
-          <TouchableOpacity
-            onPress={() => Linking.openURL('https://construction-manage.improve-biz.com/lp.html')}
-          >
-            <Text style={styles.noticeLink}>
-              https://construction-manage.improve-biz.com/lp.html
-            </Text>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.form}>
@@ -212,12 +204,6 @@ const styles = StyleSheet.create({
     color: '#1e40af',
     lineHeight: 20,
     marginBottom: 4,
-  },
-  noticeLink: {
-    fontSize: 13,
-    color: '#2563eb',
-    textDecorationLine: 'underline',
-    marginTop: 8,
   },
   form: {
     backgroundColor: '#fff',

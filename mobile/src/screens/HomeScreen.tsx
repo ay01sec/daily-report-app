@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,14 @@ import {
   StyleSheet,
   RefreshControl,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Picker } from '@react-native-picker/picker';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import firestore from '@react-native-firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { usePrefetchMasterData } from '../hooks/usePrefetchMasterData';
-import { useOfflineStorage } from '../hooks/useOfflineStorage';
+import { useOfflineStorage, LocalReport } from '../hooks/useOfflineStorage';
 import Header from '../components/common/Header';
 import StatusBadge from '../components/common/StatusBadge';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -23,7 +23,7 @@ import { ja } from 'date-fns/locale';
 
 type RootStackParamList = {
   Home: undefined;
-  ReportNew: undefined;
+  ReportNew: { localId?: string } | undefined;
   ReportEdit: { id: string };
   ReportDetail: { id: string };
 };
@@ -111,7 +111,8 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const { prefetching, prefetched, sitesCount, employeesCount } = usePrefetchMasterData();
 
   // オフライン同期管理
-  const { online, syncing, pendingCount, syncLocalReports, clearAllLocalData } = useOfflineStorage();
+  const { online, syncing, pendingCount, syncLocalReports, clearAllLocalData, getPendingLocalReports } = useOfflineStorage();
+  const [pendingLocalReports, setPendingLocalReports] = useState<LocalReport[]>([]);
 
   const fetchReports = useCallback(async () => {
     if (!companyId || !currentUser) return;
@@ -121,13 +122,12 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       const startDate = new Date(year, month - 1, 1);
       const endDate = new Date(year, month, 0, 23, 59, 59);
 
-      const reportsRef = collection(db, 'companies', companyId, 'dailyReports');
-      const q = query(
-        reportsRef,
-        where('createdBy', '==', currentUser.uid)
-      );
-
-      const snapshot = await getDocs(q);
+      const snapshot = await firestore()
+        .collection('companies')
+        .doc(companyId)
+        .collection('dailyReports')
+        .where('createdBy', '==', currentUser.uid)
+        .get();
 
       const data = snapshot.docs
         .map((doc) => ({
@@ -146,22 +146,48 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         });
 
       setReports(data);
-    } catch (error) {
-      console.error('日報取得エラー:', error);
+    } catch (error: any) {
+      // permission-deniedエラーはログアウト時に発生する想定内のエラーなので無視
+      if (error?.code !== 'firestore/permission-denied') {
+        console.error('日報取得エラー:', error);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, [companyId, currentUser, selectedMonth]);
 
+  // 同期待ちローカルレポートを取得
+  const fetchPendingLocalReports = useCallback(async () => {
+    const reports = await getPendingLocalReports();
+    console.log('[HomeScreen] pendingLocalReports取得:', reports.length, '件');
+    reports.forEach(r => {
+      console.log(`[HomeScreen]   - ${r.localId}: status=${r.status}, firebaseId=${r.firebaseId || 'なし'}`);
+    });
+    setPendingLocalReports(reports);
+  }, [getPendingLocalReports]);
+
   useEffect(() => {
     fetchReports();
-  }, [fetchReports]);
+    fetchPendingLocalReports();
+  }, [fetchReports, fetchPendingLocalReports]);
+
+  // 同期完了後に自動リフレッシュ
+  const prevSyncingRef = useRef(syncing);
+  useEffect(() => {
+    if (prevSyncingRef.current && !syncing) {
+      console.log('[HomeScreen] 同期完了、自動リフレッシュ開始');
+      fetchReports();
+      fetchPendingLocalReports();
+    }
+    prevSyncingRef.current = syncing;
+  }, [syncing, fetchReports, fetchPendingLocalReports]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchReports();
-  }, [fetchReports]);
+    fetchPendingLocalReports();
+  }, [fetchReports, fetchPendingLocalReports]);
 
   const formatDate = (timestamp: any) => {
     if (!timestamp) return '';
@@ -209,118 +235,162 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     </TouchableOpacity>
   );
 
+  const renderListHeader = () => (
+    <>
+      {/* オフラインステータスバナー */}
+      {!online && (
+        <View style={styles.bannerOffline}>
+          <Text style={styles.bannerOfflineTitle}>オフラインモード</Text>
+          <Text style={styles.bannerOfflineText}>
+            キャッシュデータで動作中です。ネットワーク接続時に自動同期します。
+          </Text>
+        </View>
+      )}
+
+      {/* 同期待ちバナー */}
+      {pendingCount > 0 && (
+        <TouchableOpacity
+          style={styles.bannerSync}
+          onPress={async () => {
+            if (online && !syncing) {
+              console.log('[HomeScreen] 手動同期開始');
+              await syncLocalReports();
+              console.log('[HomeScreen] 手動同期完了');
+            }
+          }}
+          disabled={!online || syncing}
+        >
+          <Text style={styles.bannerSyncTitle}>
+            {syncing ? '同期中...' : `${pendingCount}件の日報が同期待ちです`}
+          </Text>
+          {online && !syncing && (
+            <Text style={styles.bannerSyncText}>タップして今すぐ同期</Text>
+          )}
+          {!online && (
+            <Text style={styles.bannerSyncText}>オフラインのため同期できません</Text>
+          )}
+        </TouchableOpacity>
+      )}
+
+      {/* デバッグ: ローカルキャッシュ削除ボタン（開発時のみ表示） */}
+      {__DEV__ && (
+        <TouchableOpacity
+          style={styles.debugButton}
+          onPress={() => {
+            Alert.alert(
+              'ローカルデータ削除',
+              'キャッシュされた全ての日報データを削除しますか？（Firebaseのデータは削除されません）',
+              [
+                { text: 'キャンセル', style: 'cancel' },
+                {
+                  text: '削除',
+                  style: 'destructive',
+                  onPress: async () => {
+                    const result = await clearAllLocalData();
+                    Alert.alert(
+                      result ? '削除完了' : 'エラー',
+                      result ? 'ローカルデータを削除しました' : '削除に失敗しました'
+                    );
+                  },
+                },
+              ]
+            );
+          }}
+        >
+          <Text style={styles.debugButtonText}>🗑 ローカルキャッシュを削除 (DEV)</Text>
+        </TouchableOpacity>
+      )}
+
+      {!loading && (
+        <SubmissionStatusBanner reports={reports} companyInfo={companyInfo} />
+      )}
+
+      {rejectedReports.length > 0 && (
+        <View style={styles.rejectedBanner}>
+          <Text style={styles.rejectedBannerTitle}>! 差戻しされた日報があります</Text>
+          <Text style={styles.rejectedBannerText}>
+            {rejectedReports.length}件の日報に修正が必要です
+          </Text>
+        </View>
+      )}
+
+      {/* 同期予定セクション */}
+      {pendingLocalReports.length > 0 && (
+        <View style={styles.pendingSection}>
+          <Text style={styles.pendingSectionTitle}>同期予定 ({pendingLocalReports.length}件)</Text>
+          {pendingLocalReports.map((localReport) => (
+            <TouchableOpacity
+              key={localReport.localId}
+              style={styles.pendingCard}
+              activeOpacity={0.7}
+              onPress={() => {
+                console.log('[HomeScreen] ローカルレポートをタップ:', localReport.localId);
+                navigation.navigate('ReportNew', { localId: localReport.localId });
+              }}
+            >
+              <View style={styles.pendingCardContent}>
+                <View>
+                  <Text style={styles.pendingDate}>
+                    {localReport.formData?.reportDate
+                      ? format(new Date(localReport.formData.reportDate), 'M月d日(E)', { locale: ja })
+                      : '日付未設定'}
+                  </Text>
+                  <Text style={styles.pendingSite}>{localReport.formData?.siteName || '現場未設定'}</Text>
+                </View>
+                <StatusBadge status={localReport.status || 'draft'} />
+              </View>
+              {!online && (
+                <Text style={styles.pendingOfflineNote}>オフラインのため同期待ち</Text>
+              )}
+              <Text style={styles.pendingTapHint}>タップして編集</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      <View style={styles.headerRow}>
+        <View style={styles.pickerContainer}>
+          <Picker
+            selectedValue={selectedMonth}
+            onValueChange={setSelectedMonth}
+            style={styles.picker}
+          >
+            {generateMonthOptions().map((opt) => (
+              <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
+            ))}
+          </Picker>
+        </View>
+
+        <TouchableOpacity
+          style={styles.newButton}
+          onPress={() => navigation.navigate('ReportNew')}
+        >
+          <Text style={styles.newButtonText}>+ 新規作成</Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+
   return (
     <View style={styles.container}>
       <Header />
 
       <View style={styles.content}>
-        {/* オフラインステータスバナー */}
-        {!online && (
-          <View style={styles.bannerOffline}>
-            <Text style={styles.bannerOfflineTitle}>オフラインモード</Text>
-            <Text style={styles.bannerOfflineText}>
-              キャッシュデータで動作中です。ネットワーク接続時に自動同期します。
-            </Text>
-          </View>
-        )}
-
-        {/* 同期待ちバナー */}
-        {pendingCount > 0 && (
-          <TouchableOpacity
-            style={styles.bannerSync}
-            onPress={async () => {
-              if (online && !syncing) {
-                console.log('[HomeScreen] 手動同期開始');
-                await syncLocalReports();
-                console.log('[HomeScreen] 手動同期完了');
-              }
-            }}
-            disabled={!online || syncing}
-          >
-            <Text style={styles.bannerSyncTitle}>
-              {syncing ? '同期中...' : `${pendingCount}件の日報が同期待ちです`}
-            </Text>
-            {online && !syncing && (
-              <Text style={styles.bannerSyncText}>タップして今すぐ同期</Text>
-            )}
-            {!online && (
-              <Text style={styles.bannerSyncText}>オフラインのため同期できません</Text>
-            )}
-          </TouchableOpacity>
-        )}
-
-        {/* デバッグ: ローカルキャッシュ削除ボタン（テスト後に __DEV__ && に戻す） */}
-        {(
-          <TouchableOpacity
-            style={styles.debugButton}
-            onPress={() => {
-              Alert.alert(
-                'ローカルデータ削除',
-                'キャッシュされた全ての日報データを削除しますか？（Firebaseのデータは削除されません）',
-                [
-                  { text: 'キャンセル', style: 'cancel' },
-                  {
-                    text: '削除',
-                    style: 'destructive',
-                    onPress: async () => {
-                      const result = await clearAllLocalData();
-                      Alert.alert(
-                        result ? '削除完了' : 'エラー',
-                        result ? 'ローカルデータを削除しました' : '削除に失敗しました'
-                      );
-                    },
-                  },
-                ]
-              );
-            }}
-          >
-            <Text style={styles.debugButtonText}>🗑 ローカルキャッシュを削除 (DEV)</Text>
-          </TouchableOpacity>
-        )}
-
-        {!loading && (
-          <SubmissionStatusBanner reports={reports} companyInfo={companyInfo} />
-        )}
-
-        {rejectedReports.length > 0 && (
-          <View style={styles.rejectedBanner}>
-            <Text style={styles.rejectedBannerTitle}>! 差戻しされた日報があります</Text>
-            <Text style={styles.rejectedBannerText}>
-              {rejectedReports.length}件の日報に修正が必要です
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.headerRow}>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={selectedMonth}
-              onValueChange={setSelectedMonth}
-              style={styles.picker}
-            >
-              {generateMonthOptions().map((opt) => (
-                <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
-              ))}
-            </Picker>
-          </View>
-
-          <TouchableOpacity
-            style={styles.newButton}
-            onPress={() => navigation.navigate('ReportNew')}
-          >
-            <Text style={styles.newButtonText}>+ 新規作成</Text>
-          </TouchableOpacity>
-        </View>
-
         {loading ? (
-          <LoadingSpinner />
+          <>
+            {renderListHeader()}
+            <LoadingSpinner />
+          </>
         ) : reports.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>この月の日報はありません</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('ReportNew')}>
-              <Text style={styles.emptyStateLink}>新しい日報を作成する</Text>
-            </TouchableOpacity>
-          </View>
+          <>
+            {renderListHeader()}
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>この月の日報はありません</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('ReportNew')}>
+                <Text style={styles.emptyStateLink}>新しい日報を作成する</Text>
+              </TouchableOpacity>
+            </View>
+          </>
         ) : (
           <FlatList
             data={reports}
@@ -331,6 +401,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
             showsVerticalScrollIndicator={false}
+            ListHeaderComponent={renderListHeader}
           />
         )}
       </View>
@@ -458,6 +529,58 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#b91c1c',
     marginTop: 4,
+  },
+  pendingSection: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    zIndex: 10,
+  },
+  pendingSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#166534',
+    marginBottom: 12,
+  },
+  pendingCard: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    zIndex: 11,
+    elevation: 2,
+  },
+  pendingCardContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  pendingDate: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#111827',
+  },
+  pendingSite: {
+    fontSize: 13,
+    color: '#4b5563',
+    marginTop: 2,
+  },
+  pendingOfflineNote: {
+    fontSize: 12,
+    color: '#92400e',
+    marginTop: 6,
+    fontStyle: 'italic',
+  },
+  pendingTapHint: {
+    fontSize: 12,
+    color: '#15803d',
+    marginTop: 6,
+    textAlign: 'right',
   },
   headerRow: {
     flexDirection: 'row',

@@ -1,14 +1,43 @@
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { Timestamp } from 'firebase/firestore';
+import firestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 
-type DateInput = Date | Timestamp | string | null | undefined;
+export type DateInput = Date | FirebaseFirestoreTypes.Timestamp | string | number | null | undefined;
 
-function toDate(date: DateInput): Date | null {
+/**
+ * 様々な日付形式をDateオブジェクトに変換
+ * @param date - 変換対象（Date, Timestamp, string, number, null, undefined）
+ * @returns Date オブジェクト、または null
+ */
+export function toDate(date: DateInput): Date | null {
   if (!date) return null;
   if (date instanceof Date) return date;
-  if (typeof date === 'object' && 'toDate' in date) return date.toDate();
-  return new Date(date);
+  // Firestore Timestamp
+  if (typeof date === 'object' && 'toDate' in date && typeof date.toDate === 'function') {
+    return date.toDate();
+  }
+  // Unix timestamp (number)
+  if (typeof date === 'number') {
+    // ミリ秒か秒かを判定（1970年から50年以上経過していればミリ秒と判断）
+    return date > 1e12 ? new Date(date) : new Date(date * 1000);
+  }
+  // ISO文字列などの文字列
+  if (typeof date === 'string') {
+    const parsed = new Date(date);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
+/**
+ * 様々な日付形式をFirestore Timestampに変換
+ * @param date - 変換対象
+ * @returns Firestore Timestamp、または null
+ */
+export function toTimestamp(date: DateInput): FirebaseFirestoreTypes.Timestamp | null {
+  const d = toDate(date);
+  if (!d) return null;
+  return firestore.Timestamp.fromDate(d);
 }
 
 export function formatDate(date: DateInput, formatStr: string = 'yyyy年M月d日'): string {

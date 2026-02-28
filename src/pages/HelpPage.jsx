@@ -24,6 +24,32 @@ export default function HelpPage() {
           </button>
         )}
 
+        {/* サポート・お問い合わせセクション */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-4">
+          <h2 className="text-lg font-semibold text-blue-800 mb-3">サポート・お問い合わせ</h2>
+          <p className="text-sm text-blue-700 mb-4">
+            ご不明な点やお困りのことがございましたら、下記メールアドレスまでお気軽にお問い合わせください。
+          </p>
+          <div className="bg-white rounded-lg p-4 border border-blue-100">
+            <div className="flex items-center mb-2">
+              <span className="text-sm font-medium text-gray-600 w-24">メール:</span>
+              <a
+                href="mailto:support@improve-biz.com"
+                className="text-blue-600 hover:text-blue-800 font-medium"
+              >
+                support@improve-biz.com
+              </a>
+            </div>
+            <div className="flex items-start">
+              <span className="text-sm font-medium text-gray-600 w-24">対応時間:</span>
+              <span className="text-sm text-gray-700">平日 9:00〜18:00（土日祝除く）</span>
+            </div>
+          </div>
+          <p className="text-xs text-blue-600 mt-3">
+            ※ お問い合わせの際は、ご利用の端末、OSバージョン、発生している問題の詳細をお知らせください。
+          </p>
+        </div>
+
         <div className="bg-white rounded-xl shadow-sm p-5 prose prose-sm max-w-none
           prose-headings:text-gray-800
           prose-h1:text-xl prose-h1:border-b prose-h1:border-gray-200 prose-h1:pb-3 prose-h1:mb-5

@@ -127,8 +127,9 @@ export default function PhotoUploader({
       setUploading(true);
 
       // ネットワーク状態を確認
+      // Android では isInternetReachable が null を返すことがあるため !== false で判定
       const netState = await NetInfo.fetch();
-      const isOnline = netState.isConnected && netState.isInternetReachable;
+      const isOnline = netState.isConnected && netState.isInternetReachable !== false;
 
       const newPhotos: Photo[] = [];
       const newLocalPhotos: LocalPhoto[] = [...localPhotos];
@@ -191,8 +192,9 @@ export default function PhotoUploader({
       const fileName = `${Date.now()}_camera.jpg`;
 
       // ネットワーク状態を確認
+      // Android では isInternetReachable が null を返すことがあるため !== false で判定
       const netState = await NetInfo.fetch();
-      const isOnline = netState.isConnected && netState.isInternetReachable;
+      const isOnline = netState.isConnected && netState.isInternetReachable !== false;
 
       let photo: Photo;
       const newLocalPhotos: LocalPhoto[] = [...localPhotos];

@@ -17,7 +17,7 @@ export type RootStackParamList = {
   Login: undefined;
   ForgotPassword: undefined;
   Home: undefined;
-  ReportNew: undefined;
+  ReportNew: { localId?: string } | undefined;
   ReportEdit: { id: string };
   ReportDetail: { id: string };
   Help: undefined;

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import firestore from '@react-native-firebase/firestore';
 import NetInfo from '@react-native-community/netinfo';
-import { db } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { cacheEmployees, getCachedEmployees } from '../utils/storageUtils';
 
@@ -39,16 +38,20 @@ export function useEmployees(): UseEmployeesResult {
         setLoading(true);
 
         // ネットワーク状態を確認
+        // Android では isInternetReachable が null を返すことがあるため !== false で判定
         const netState = await NetInfo.fetch();
-        const isOnline = netState.isConnected && netState.isInternetReachable;
+        const isOnline = netState.isConnected && netState.isInternetReachable !== false;
 
         let allEmployees: Employee[] = [];
 
         if (isOnline) {
           // オンライン：Firebaseから取得してキャッシュに保存
           try {
-            const employeesRef = collection(db, 'companies', companyId, 'employees');
-            const snapshot = await getDocs(employeesRef);
+            const snapshot = await firestore()
+              .collection('companies')
+              .doc(companyId)
+              .collection('employees')
+              .get();
 
             allEmployees = snapshot.docs.map((doc) => {
               const docData = doc.data();

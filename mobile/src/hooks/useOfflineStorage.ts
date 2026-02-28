@@ -3,3 +3,4 @@
 // to ensure a single NetInfo listener across the entire app
 
 export { useOfflineStorage } from '../contexts/OfflineStorageContext';
+export type { LocalReport } from '../contexts/OfflineStorageContext';

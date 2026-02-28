@@ -11,8 +11,7 @@ import {
 import SignatureScreen, { SignatureViewRef } from 'react-native-signature-canvas';
 import NetInfo from '@react-native-community/netinfo';
 import storage from '@react-native-firebase/storage';
-import { doc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import firestore from '@react-native-firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatDateWithDay } from '../../utils/dateUtils';
 import {
@@ -64,8 +63,9 @@ export default function SignatureModal({
     setSaving(true);
     try {
       // ネットワーク状態を確認
+      // Android では isInternetReachable が null を返すことがあるため !== false で判定
       const netState = await NetInfo.fetch();
-      const isOnline = netState.isConnected && netState.isInternetReachable;
+      const isOnline = netState.isConnected && netState.isInternetReachable !== false;
 
       // 署名をローカルに保存（常に保存）
       const localId = localReportId || `local_${Date.now()}`;
@@ -84,22 +84,32 @@ export default function SignatureModal({
           await storageRef.putString(base64Data, 'base64', { contentType: 'image/png' });
           const downloadUrl = await storageRef.getDownloadURL();
 
-          await updateDoc(doc(db, 'companies', companyId!, 'dailyReports', reportId), {
-            'clientSignature.imageUrl': downloadUrl,
-            'clientSignature.signedAt': Timestamp.now(),
-            'clientSignature.signerName': null,
-            status: 'signed',
-            updatedAt: serverTimestamp(),
-          });
+          await firestore()
+            .collection('companies')
+            .doc(companyId!)
+            .collection('dailyReports')
+            .doc(reportId)
+            .update({
+              'clientSignature.imageUrl': downloadUrl,
+              'clientSignature.signedAt': firestore.Timestamp.now(),
+              'clientSignature.signerName': null,
+              status: 'signed',
+              updatedAt: firestore.FieldValue.serverTimestamp(),
+            });
 
           // ローカルにも保存（Firebaseにアップロード済みとしてマーク）
           // 既存のローカルレポートがあれば取得して、localPhotosなどを保持
           const existingReport = await getLocalReport(localId);
+          console.log('[SignatureModal] オンライン署名後のローカル保存:', {
+            localId,
+            existingFound: !!existingReport,
+            existingLocalPhotos: existingReport?.localPhotos?.length || 0,
+          });
           const localReport: LocalReport = {
             localId,
             companyId: companyId!,
             firebaseId: reportId,
-            formData: formData || {},
+            formData: existingReport?.formData || formData || {},  // 既存のformDataを優先
             status: 'signed',
             signatureLocalPath,
             signatureFirebaseUrl: downloadUrl,
@@ -140,13 +150,20 @@ export default function SignatureModal({
 
   const saveSignedReportLocally = async (localId: string, signatureLocalPath: string) => {
     // 既存のローカルレポートがあれば取得して、localPhotosなどを保持
+    console.log('[SignatureModal] 既存レポート取得中:', localId);
     const existingReport = await getLocalReport(localId);
+    console.log('[SignatureModal] 既存レポート取得結果:', {
+      found: !!existingReport,
+      existingStatus: existingReport?.status,
+      existingLocalPhotos: existingReport?.localPhotos?.length || 0,
+      existingFormDataPhotos: existingReport?.formData?.photos?.length || 0,
+    });
 
     const localReport: LocalReport = {
       localId,
       companyId: companyId!,
       firebaseId: reportId || undefined,
-      formData: formData || {},
+      formData: existingReport?.formData || formData || {},  // 既存のformDataを優先
       status: 'signed',
       signatureLocalPath,
       // 既存のlocalPhotosを保持
@@ -159,7 +176,9 @@ export default function SignatureModal({
       localId,
       hasFirebaseId: !!localReport.firebaseId,
       signatureLocalPath,
+      status: localReport.status,
       localPhotosCount: localReport.localPhotos?.length || 0,
+      formDataPhotosCount: localReport.formData?.photos?.length || 0,
     });
 
     await saveLocalReport(localReport);

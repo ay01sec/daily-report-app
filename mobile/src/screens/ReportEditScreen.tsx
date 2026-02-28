@@ -10,9 +10,8 @@ import {
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, deleteObject as deleteStorageObject } from 'firebase/storage';
-import { db, storage } from '../config/firebase';
+import firestore from '@react-native-firebase/firestore';
+import storage from '@react-native-firebase/storage';
 import { useAuth } from '../contexts/AuthContext';
 import { useReport } from '../hooks/useReport';
 import Header from '../components/common/Header';
@@ -77,21 +76,25 @@ export default function ReportEditScreen({ navigation, route }: ReportEditScreen
                 const pathEnd = url.indexOf('?');
                 const encodedPath = url.substring(pathStart, pathEnd);
                 const storagePath = decodeURIComponent(encodedPath);
-                const storageRef = ref(storage, storagePath);
                 try {
-                  await deleteStorageObject(storageRef);
+                  await storage().ref(storagePath).delete();
                 } catch (e) {
                   console.warn('署名画像の削除に失敗:', e);
                 }
               }
 
-              await updateDoc(doc(db, 'companies', companyId!, 'dailyReports', id), {
-                'clientSignature.imageUrl': null,
-                'clientSignature.signedAt': null,
-                'clientSignature.signerName': null,
-                status: 'draft',
-                updatedAt: serverTimestamp(),
-              });
+              await firestore()
+                .collection('companies')
+                .doc(companyId!)
+                .collection('dailyReports')
+                .doc(id)
+                .update({
+                  'clientSignature.imageUrl': null,
+                  'clientSignature.signedAt': null,
+                  'clientSignature.signerName': null,
+                  status: 'draft',
+                  updatedAt: firestore.FieldValue.serverTimestamp(),
+                });
             } catch (err) {
               console.error('サインやり直しエラー:', err);
               Alert.alert('エラー', 'エラーが発生しました');
@@ -113,11 +116,16 @@ export default function ReportEditScreen({ navigation, route }: ReportEditScreen
           onPress: async () => {
             setSubmitting(true);
             try {
-              await updateDoc(doc(db, 'companies', companyId!, 'dailyReports', id), {
-                status: 'submitted',
-                submittedAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-              });
+              await firestore()
+                .collection('companies')
+                .doc(companyId!)
+                .collection('dailyReports')
+                .doc(id)
+                .update({
+                  status: 'submitted',
+                  submittedAt: firestore.FieldValue.serverTimestamp(),
+                  updatedAt: firestore.FieldValue.serverTimestamp(),
+                });
               navigation.navigate('Home');
             } catch (err) {
               console.error('送信エラー:', err);

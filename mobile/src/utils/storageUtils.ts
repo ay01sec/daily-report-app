@@ -184,11 +184,29 @@ export async function savePhotoLocally(
   await ensurePhotosDir();
   const localPath = `${PHOTOS_DIR}${Date.now()}_${fileName}`;
 
+  console.log(`[Photo] 保存開始: ${sourceUri} → ${localPath}`);
+
+  // ソースファイルの存在確認
+  const sourceInfo = await FileSystem.getInfoAsync(sourceUri);
+  if (!sourceInfo.exists) {
+    console.error(`[Photo] ソースファイルが存在しません: ${sourceUri}`);
+    throw new Error('写真のソースファイルが見つかりません');
+  }
+  console.log(`[Photo] ソースファイル確認: exists=${sourceInfo.exists}, size=${(sourceInfo as any).size || 'unknown'}`);
+
   // ソースURIからローカルにコピー
   await FileSystem.copyAsync({
     from: sourceUri,
     to: localPath,
   });
+
+  // コピーが成功したか確認
+  const destInfo = await FileSystem.getInfoAsync(localPath);
+  if (!destInfo.exists) {
+    console.error(`[Photo] コピー失敗: ファイルが作成されませんでした: ${localPath}`);
+    throw new Error('写真のコピーに失敗しました');
+  }
+  console.log(`[Photo] 保存完了: ${localPath}, size=${(destInfo as any).size || 'unknown'}`);
 
   return {
     localPath,
@@ -226,6 +244,44 @@ export async function deletePhotoLocally(localPath: string): Promise<boolean> {
   }
 }
 
+// 写真ディレクトリの状態をログ出力（デバッグ用）
+export async function debugListPhotos(): Promise<string[]> {
+  try {
+    await ensurePhotosDir();
+    const files = await FileSystem.readDirectoryAsync(PHOTOS_DIR);
+    console.log(`[Photo Debug] 写真ディレクトリ内のファイル (${files.length}件):`);
+    files.forEach(f => console.log(`  - ${f}`));
+    return files;
+  } catch (error) {
+    console.error('[Photo Debug] ディレクトリ読み込みエラー:', error);
+    return [];
+  }
+}
+
+// 特定のLocalReportの写真が存在するか確認（デバッグ用）
+export async function verifyLocalReportPhotos(report: LocalReport): Promise<{
+  valid: boolean;
+  details: { path: string; exists: boolean }[];
+}> {
+  const details: { path: string; exists: boolean }[] = [];
+
+  if (!report.localPhotos || report.localPhotos.length === 0) {
+    return { valid: true, details };
+  }
+
+  for (const photo of report.localPhotos) {
+    const info = await FileSystem.getInfoAsync(photo.localPath);
+    details.push({
+      path: photo.localPath,
+      exists: info.exists,
+    });
+    console.log(`[Photo Verify] ${photo.localPath}: ${info.exists ? '存在' : '見つからない'}`);
+  }
+
+  const valid = details.every(d => d.exists);
+  return { valid, details };
+}
+
 // ローカル日報を保存（オフライン用）
 export interface LocalReport {
   localId: string;
@@ -242,16 +298,30 @@ export interface LocalReport {
 
 export async function saveLocalReport(report: LocalReport): Promise<string> {
   try {
+    console.log(`[LocalReport] 保存開始: localId=${report.localId}, status=${report.status}`);
+
+    // 写真が設定されている場合、存在確認
+    if (report.localPhotos && report.localPhotos.length > 0) {
+      console.log(`[LocalReport] 写真数: ${report.localPhotos.length}`);
+      for (const photo of report.localPhotos) {
+        const info = await FileSystem.getInfoAsync(photo.localPath);
+        console.log(`[LocalReport] 写真確認: ${photo.localPath} - ${info.exists ? '存在' : '見つからない'}`);
+      }
+    }
+
     const reports = await getLocalReports();
     const existingIndex = reports.findIndex(r => r.localId === report.localId);
 
     if (existingIndex >= 0) {
+      console.log(`[LocalReport] 既存レポートを更新: index=${existingIndex}`);
       reports[existingIndex] = { ...report, updatedAt: new Date().toISOString() };
     } else {
+      console.log(`[LocalReport] 新規レポートを追加`);
       reports.push({ ...report, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
     }
 
     await AsyncStorage.setItem(LOCAL_REPORTS_KEY, JSON.stringify(reports));
+    console.log(`[LocalReport] 保存完了: localId=${report.localId}, 合計${reports.length}件`);
     return report.localId;
   } catch (error) {
     console.error('ローカル日報保存エラー:', error);

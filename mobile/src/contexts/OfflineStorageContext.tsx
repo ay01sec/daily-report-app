@@ -1,10 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
 import debounce from 'lodash/debounce';
 import { Alert, BackHandler } from 'react-native';
-import { collection, addDoc, doc, updateDoc, deleteDoc, getDoc, getDocs, query, where, serverTimestamp, Timestamp } from 'firebase/firestore';
+import firestore from '@react-native-firebase/firestore';
 import storage from '@react-native-firebase/storage';
 import NetInfo from '@react-native-community/netinfo';
-import { db } from '../config/firebase';
 import { useAuth } from './AuthContext';
 import {
   saveDraft,
@@ -22,6 +21,10 @@ import {
   LocalReport,
   LocalPhoto,
 } from '../utils/storageUtils';
+import { extractSnapshot } from '../utils/firestoreUtils';
+
+// ローカルレポートの型をエクスポート
+export type { LocalReport } from '../utils/storageUtils';
 
 interface OfflineStorageContextValue {
   online: boolean;
@@ -35,6 +38,7 @@ interface OfflineStorageContextValue {
   syncPendingReports: () => Promise<void>;
   syncLocalReports: () => Promise<void>;
   clearAllLocalData: () => Promise<boolean>;
+  getPendingLocalReports: () => Promise<LocalReport[]>;
 }
 
 const OfflineStorageContext = createContext<OfflineStorageContextValue | undefined>(undefined);
@@ -76,10 +80,12 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
     const pendingLocalReports = localReports.filter(r => {
       if (r.companyId !== companyId) return false;
 
+      // Firebase IDがない = まだ同期されていない新規レポート
+      const isNewReport = !r.firebaseId;
       const hasUnuploadedSignature = r.status === 'signed' && r.signatureLocalPath && !r.signatureFirebaseUrl;
       const hasUnuploadedPhotos = r.localPhotos && r.localPhotos.some(p => !p.firebaseUrl);
 
-      return hasUnuploadedSignature || hasUnuploadedPhotos;
+      return isNewReport || hasUnuploadedSignature || hasUnuploadedPhotos;
     });
 
     console.log('[updatePendingCount] pending:', pending.length, 'pendingLocalReports:', pendingLocalReports.length);
@@ -173,7 +179,7 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
     });
 
     const pendingReports = localReports.filter(r => {
-      console.log(`[Sync] レポート判定: localId=${r.localId}, companyId=${r.companyId}, status=${r.status}`);
+      console.log(`[Sync] レポート判定: localId=${r.localId}, companyId=${r.companyId}, status=${r.status}, firebaseId=${r.firebaseId}`);
       console.log(`[Sync]   signatureLocalPath=${r.signatureLocalPath}`);
       console.log(`[Sync]   signatureFirebaseUrl=${r.signatureFirebaseUrl}`);
       console.log(`[Sync]   localPhotos count=${r.localPhotos?.length || 0}`);
@@ -183,12 +189,14 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
         return false;
       }
 
+      // Firebase IDがない = まだ同期されていない新規レポート
+      const isNewReport = !r.firebaseId;
       const hasUnuploadedSignature = r.status === 'signed' && r.signatureLocalPath && !r.signatureFirebaseUrl;
       const hasUnuploadedPhotos = r.localPhotos && r.localPhotos.some(p => !p.firebaseUrl);
 
-      console.log(`[Sync]   hasUnuploadedSignature=${hasUnuploadedSignature}, hasUnuploadedPhotos=${hasUnuploadedPhotos}`);
+      console.log(`[Sync]   isNewReport=${isNewReport}, hasUnuploadedSignature=${hasUnuploadedSignature}, hasUnuploadedPhotos=${hasUnuploadedPhotos}`);
 
-      if (!hasUnuploadedSignature && !hasUnuploadedPhotos) {
+      if (!isNewReport && !hasUnuploadedSignature && !hasUnuploadedPhotos) {
         console.log(`[Sync] スキップ (同期不要): ${r.localId}`);
         return false;
       }
@@ -222,78 +230,69 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
           let firebaseReportId = report.firebaseId;
 
           if (!firebaseReportId) {
-            console.log(`[Sync] Firebase IDなし、既存チェック開始: ${report.localId}`);
+            // 新規ドキュメントを作成（重複検出は行わない - 各オフラインレポートは独立したドキュメントとして作成）
+            console.log(`[Sync] Firebase IDなし、新規作成開始: ${report.localId}`);
+            console.log(`[Sync] formData.createdBy: ${report.formData.createdBy}`);
+            console.log(`[Sync] formData.siteId: ${report.formData.siteId}`);
+            console.log(`[Sync] formData.reportDate: ${report.formData.reportDate}`);
 
-            const reportDate = report.formData.reportDate
-              ? new Date(report.formData.reportDate)
-              : new Date();
-            const reportDateStr = `${reportDate.getFullYear()}-${String(reportDate.getMonth() + 1).padStart(2, '0')}-${String(reportDate.getDate()).padStart(2, '0')}`;
-
-            const existingQuery = query(
-              collection(db, 'companies', companyId, 'dailyReports'),
-              where('createdBy', '==', report.formData.createdBy || '')
-            );
-
-            const existingDocs = await getDocs(existingQuery);
-            const matchingDoc = existingDocs.docs.find(doc => {
-              const data = doc.data();
-              const docDate = data.reportDate?.toDate ? data.reportDate.toDate() : new Date(data.reportDate);
-              const docDateStr = `${docDate.getFullYear()}-${String(docDate.getMonth() + 1).padStart(2, '0')}-${String(docDate.getDate()).padStart(2, '0')}`;
-              return data.siteId === (report.formData.siteId || '') && docDateStr === reportDateStr;
-            });
-
-            if (matchingDoc) {
-              firebaseReportId = matchingDoc.id;
-              report.firebaseId = firebaseReportId;
-              await saveLocalReport(report);
-              console.log(`[Sync] 既存日報を発見、Firebase ID使用: ${firebaseReportId}`);
-            } else {
-              console.log(`[Sync] 既存なし、新規作成開始: ${report.localId}`);
-
-              const photosForFirebase = (report.formData.photos || [])
-                .filter((p: any) => !p.isLocal)
-                .map((p: any) => ({ url: p.url, path: p.path, name: p.name }));
-
-              const reportData = {
-                companyId,
-                siteId: report.formData.siteId || '',
-                siteName: report.formData.siteName || '',
-                reportDate: report.formData.reportDate
-                  ? Timestamp.fromDate(new Date(report.formData.reportDate))
-                  : Timestamp.now(),
-                createdBy: report.formData.createdBy || '',
-                createdByName: report.formData.createdByName || '',
-                workers: report.formData.workers || [],
-                notes: report.formData.notes || '',
-                weather: report.formData.weather || '',
-                photos: photosForFirebase,
-                status: 'draft',
-                submittedAt: null,
-                clientSignature: {
-                  imageUrl: null,
-                  signedAt: null,
-                  signerName: null,
-                },
-                approval: {
-                  approvedBy: null,
-                  approvedByName: null,
-                  approvedAt: null,
-                },
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-              };
-
-              const docRef = await addDoc(
-                collection(db, 'companies', companyId, 'dailyReports'),
-                reportData
-              );
-              firebaseReportId = docRef.id;
-              console.log(`[Sync] 日報作成完了: ${firebaseReportId}`);
-
-              report.firebaseId = firebaseReportId;
-              await saveLocalReport(report);
-              console.log(`[Sync] Firebase ID保存: ${firebaseReportId}`);
+            // createdByが空の場合はエラー
+            if (!report.formData.createdBy) {
+              console.error('[Sync] createdByが未設定のためスキップ:', report.localId);
+              hasError = true;
+              errorMessage = 'ユーザー情報が取得できません。再ログインしてください。';
+              break;
             }
+
+            const photosForFirebase = (report.formData.photos || [])
+              .filter((p: any) => !p.isLocal)
+              .map((p: any) => ({ url: p.url, path: p.path, name: p.name }));
+
+            // ローカルのステータスを保持（draft または signed）
+            const syncStatus = report.status === 'signed' ? 'signed' : 'draft';
+            console.log(`[Sync] 同期ステータス: ${syncStatus}`);
+
+            const reportData = {
+              companyId,
+              siteId: report.formData.siteId || '',
+              siteName: report.formData.siteName || '',
+              reportDate: report.formData.reportDate
+                ? firestore.Timestamp.fromDate(new Date(report.formData.reportDate))
+                : firestore.Timestamp.now(),
+              createdBy: report.formData.createdBy,
+              createdByName: report.formData.createdByName || '',
+              workers: report.formData.workers || [],
+              notes: report.formData.notes || '',
+              weather: report.formData.weather || '',
+              photos: photosForFirebase,
+              status: syncStatus,
+              submittedAt: null,
+              clientSignature: {
+                imageUrl: null,
+                signedAt: null,
+                signerName: null,
+              },
+              approval: {
+                approvedBy: null,
+                approvedByName: null,
+                approvedAt: null,
+              },
+              createdAt: firestore.FieldValue.serverTimestamp(),
+              updatedAt: firestore.FieldValue.serverTimestamp(),
+            };
+
+            console.log(`[Sync] Firestore新規作成開始: companyId=${companyId}, createdBy=${reportData.createdBy}`);
+            const docRef = await firestore()
+              .collection('companies')
+              .doc(companyId)
+              .collection('dailyReports')
+              .add(reportData);
+            firebaseReportId = docRef.id;
+            console.log(`[Sync] 日報作成完了: ${firebaseReportId}, createdBy=${reportData.createdBy}`);
+
+            report.firebaseId = firebaseReportId;
+            await saveLocalReport(report);
+            console.log(`[Sync] Firebase ID保存: ${firebaseReportId}`);
           } else {
             console.log(`[Sync] 既存Firebase ID使用: ${firebaseReportId}`);
           }
@@ -335,16 +334,22 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
             }
 
             if (newlyUploadedPhotos.length > 0) {
-              const currentDoc = await getDoc(doc(db, 'companies', companyId, 'dailyReports', firebaseReportId!));
-              const currentPhotos: any[] = currentDoc.exists() ? (currentDoc.data()?.photos || []) : [];
+              const currentDocRef = firestore()
+                .collection('companies')
+                .doc(companyId)
+                .collection('dailyReports')
+                .doc(firebaseReportId!);
+              const currentDoc = await currentDocRef.get();
+              const { exists: docExists, data: docData } = extractSnapshot(currentDoc);
+              const currentPhotos: any[] = docExists ? (docData?.photos || []) : [];
 
               const existingUrls = new Set(currentPhotos.map((p: any) => p.url));
               const photosToAdd = newlyUploadedPhotos.filter(p => !existingUrls.has(p.url));
 
               if (photosToAdd.length > 0) {
-                await updateDoc(doc(db, 'companies', companyId, 'dailyReports', firebaseReportId!), {
+                await currentDocRef.update({
                   photos: [...currentPhotos, ...photosToAdd],
-                  updatedAt: serverTimestamp(),
+                  updatedAt: firestore.FieldValue.serverTimestamp(),
                 });
                 console.log(`[Sync] Firestore写真更新: 既存${currentPhotos.length}件 + 新規${photosToAdd.length}件`);
               } else {
@@ -362,55 +367,55 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
           console.log(`[Sync] 署名チェック: status=${report.status}, signatureLocalPath=${report.signatureLocalPath}, signatureFirebaseUrl=${report.signatureFirebaseUrl}`);
 
           if (report.status === 'signed' && report.signatureLocalPath && !report.signatureFirebaseUrl) {
-            const currentDoc = await getDoc(doc(db, 'companies', companyId, 'dailyReports', firebaseReportId!));
-            const existingSignatureUrl = currentDoc.exists() ? currentDoc.data()?.clientSignature?.imageUrl : null;
-
-            if (existingSignatureUrl) {
-              console.log(`[Sync] 署名は既にFirestoreに存在: ${existingSignatureUrl}`);
-              report.signatureFirebaseUrl = existingSignatureUrl;
-              await saveLocalReport(report);
-            } else {
-              console.log(`[Sync] 署名アップロード開始: ${report.signatureLocalPath}`);
-              const signatureBase64 = await loadSignatureLocally(report.signatureLocalPath);
-              if (!signatureBase64) {
-                console.error('[Sync] 署名画像が見つかりません:', report.signatureLocalPath);
-                console.log(`[Sync] 署名ファイルが見つからないため、同期キューから削除: ${report.localId}`);
-                const updatedReport: LocalReport = {
-                  ...report,
-                  firebaseId: firebaseReportId || report.firebaseId,
-                  signatureLocalPath: undefined,
-                  status: 'draft',
-                };
-                await saveLocalReport(updatedReport);
-                reportsToDelete.push(report.localId);
-                continue;
-              }
-              console.log(`[Sync] 署名Base64読み込み完了: ${signatureBase64.substring(0, 50)}...`);
-
-              // Storageルールに合わせたパス: signatures/{companyId}/{reportId}/{timestamp}.png
-              const timestamp = Date.now();
-              const fileName = `signatures/${companyId}/${firebaseReportId}/signature_${timestamp}.png`;
-              const storageRef = storage().ref(fileName);
-
-              // base64 data URLからbase64部分を抽出してアップロード
-              const base64Data = signatureBase64.replace(/^data:image\/\w+;base64,/, '');
-              console.log(`[Sync] 署名アップロード中...`);
-              await storageRef.putString(base64Data, 'base64', { contentType: 'image/png' });
-              console.log(`[Sync] 署名アップロード完了`);
-
-              const signatureUrl = await storageRef.getDownloadURL();
-
-              await updateDoc(doc(db, 'companies', companyId, 'dailyReports', firebaseReportId!), {
-                'clientSignature.imageUrl': signatureUrl,
-                'clientSignature.signedAt': serverTimestamp(),
-                'clientSignature.signerName': report.formData.signerName || '',
-                status: 'signed',
-                updatedAt: serverTimestamp(),
-              });
-
-              report.signatureFirebaseUrl = signatureUrl;
-              console.log(`[Sync] 署名アップロード完了: ${firebaseReportId}`);
+            // 新規ドキュメントなので常に署名をアップロード
+            console.log(`[Sync] 署名アップロード開始: ${report.signatureLocalPath}`);
+            const signatureBase64 = await loadSignatureLocally(report.signatureLocalPath);
+            if (!signatureBase64) {
+              console.error('[Sync] 署名画像が見つかりません:', report.signatureLocalPath);
+              console.log(`[Sync] 署名ファイルが見つからないため、同期キューから削除: ${report.localId}`);
+              const updatedReport: LocalReport = {
+                ...report,
+                firebaseId: firebaseReportId || report.firebaseId,
+                signatureLocalPath: undefined,
+                status: 'draft',
+              };
+              await saveLocalReport(updatedReport);
+              reportsToDelete.push(report.localId);
+              continue;
             }
+            console.log(`[Sync] 署名Base64読み込み完了: ${signatureBase64.substring(0, 50)}...`);
+
+            // Storageルールに合わせたパス: signatures/{companyId}/{reportId}/{timestamp}.png
+            const timestamp = Date.now();
+            const fileName = `signatures/${companyId}/${firebaseReportId}/signature_${timestamp}.png`;
+            const storageRef = storage().ref(fileName);
+
+            // base64 data URLからbase64部分を抽出してアップロード
+            const base64Data = signatureBase64.replace(/^data:image\/\w+;base64,/, '');
+            console.log(`[Sync] 署名アップロード中...`);
+            await storageRef.putString(base64Data, 'base64', { contentType: 'image/png' });
+            console.log(`[Sync] 署名アップロード完了`);
+
+            const signatureUrl = await storageRef.getDownloadURL();
+
+            // 署名情報とステータスを更新（signedに変更）
+            console.log(`[Sync] Firestore署名更新開始: ${firebaseReportId}, companyId=${companyId}`);
+            await firestore()
+              .collection('companies')
+              .doc(companyId)
+              .collection('dailyReports')
+              .doc(firebaseReportId!)
+              .update({
+                'clientSignature.imageUrl': signatureUrl,
+                'clientSignature.signedAt': firestore.FieldValue.serverTimestamp(),
+                'clientSignature.signerName': report.formData.signerName || '',
+                status: 'signed',  // ステータスもsignedに更新
+                updatedAt: firestore.FieldValue.serverTimestamp(),
+              });
+            console.log(`[Sync] Firestore署名更新成功: ${firebaseReportId}, status=signed`);
+
+            report.signatureFirebaseUrl = signatureUrl;
+            console.log(`[Sync] 署名アップロード完了: ${firebaseReportId}`);
           }
 
           const updatedReport: LocalReport = {
@@ -437,10 +442,12 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
           [{ text: 'OK' }]
         );
       } else if (hasError) {
+        // エラー時は処理済みフラグをクリアして再試行可能にする
+        processedLocalIdsRef.current.clear();
         handleSyncError(errorMessage, false);
       } else if (syncedCount > 0) {
         console.log(`[Sync] 全ての同期が完了: ${syncedCount}件`);
-        Alert.alert('同期完了', `${syncedCount}件の日報を同期しました。`, [{ text: 'OK' }]);
+        Alert.alert('同期完了', `${syncedCount}件の日報を同期しました。提出するには日報を開いて「提出」ボタンを押してください。`, [{ text: 'OK' }]);
       } else {
         console.log('[Sync] 同期対象なし');
       }
@@ -476,12 +483,12 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
         const reportDate = item.reportDate ? new Date(item.reportDate) : new Date();
         const reportDateStr = `${reportDate.getFullYear()}-${String(reportDate.getMonth() + 1).padStart(2, '0')}-${String(reportDate.getDate()).padStart(2, '0')}`;
 
-        const existingQuery = query(
-          collection(db, 'companies', companyId, 'dailyReports'),
-          where('createdBy', '==', item.createdBy || '')
-        );
-
-        const existingDocs = await getDocs(existingQuery);
+        const existingDocs = await firestore()
+          .collection('companies')
+          .doc(companyId)
+          .collection('dailyReports')
+          .where('createdBy', '==', item.createdBy || '')
+          .get();
         const matchingDoc = existingDocs.docs.find(doc => {
           const data = doc.data();
           const docDate = data.reportDate?.toDate ? data.reportDate.toDate() : new Date(data.reportDate);
@@ -497,15 +504,19 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
 
         const reportData = {
           ...item,
-          reportDate: Timestamp.fromDate(new Date(item.reportDate)),
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
+          reportDate: firestore.Timestamp.fromDate(new Date(item.reportDate)),
+          createdAt: firestore.FieldValue.serverTimestamp(),
+          updatedAt: firestore.FieldValue.serverTimestamp(),
         };
 
         delete reportData.id;
         delete reportData.pendingSince;
 
-        await addDoc(collection(db, 'companies', companyId, 'dailyReports'), reportData);
+        await firestore()
+          .collection('companies')
+          .doc(companyId)
+          .collection('dailyReports')
+          .add(reportData);
         console.log(`[SyncPending] 新規日報作成完了`);
         await removePendingSync(item.id);
       } catch (error: any) {
@@ -546,6 +557,8 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
             await syncLocalReports();
           } catch (error) {
             console.error('[Network] 同期中にエラー:', error);
+            // エラー時は次回再接続で再試行できるようにフラグをリセット
+            hasSyncedOnReconnect.current = false;
           }
         } else if (!isConnected) {
           hasSyncedOnReconnect.current = false;
@@ -599,6 +612,23 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
     return result;
   }, [updatePendingCount]);
 
+  // 同期待ちのローカルレポートを取得
+  const getPendingLocalReportsCallback = useCallback(async (): Promise<LocalReport[]> => {
+    if (!companyId) return [];
+
+    const localReports = await getLocalReports();
+    return localReports.filter(r => {
+      if (r.companyId !== companyId) return false;
+
+      // Firebase IDがない = まだ同期されていない新規レポート
+      const isNewReport = !r.firebaseId;
+      const hasUnuploadedSignature = r.status === 'signed' && r.signatureLocalPath && !r.signatureFirebaseUrl;
+      const hasUnuploadedPhotos = r.localPhotos && r.localPhotos.some(p => !p.firebaseUrl);
+
+      return isNewReport || hasUnuploadedSignature || hasUnuploadedPhotos;
+    });
+  }, [companyId]);
+
   const value: OfflineStorageContextValue = {
     online,
     syncing,
@@ -611,6 +641,7 @@ export function OfflineStorageProvider({ children }: OfflineStorageProviderProps
     syncPendingReports,
     syncLocalReports,
     clearAllLocalData: clearAllLocalDataCallback,
+    getPendingLocalReports: getPendingLocalReportsCallback,
   };
 
   return (

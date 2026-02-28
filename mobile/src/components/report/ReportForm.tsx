@@ -11,15 +11,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import {
-  collection,
-  addDoc,
-  updateDoc,
-  doc,
-  serverTimestamp,
-  Timestamp,
-} from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import firestore from '@react-native-firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import { useEmployees } from '../../hooks/useEmployees';
 import { useSites } from '../../hooks/useSites';
@@ -31,7 +23,7 @@ import LoadingSpinner from '../common/LoadingSpinner';
 import ModalPicker from '../common/ModalPicker';
 import { getTodayString, fromDateInputValue, formatDate } from '../../utils/dateUtils';
 import { validateReport } from '../../utils/validationUtils';
-import { saveLocalReport, LocalReport, LocalPhoto } from '../../utils/storageUtils';
+import { saveLocalReport, getLocalReport, LocalReport, LocalPhoto } from '../../utils/storageUtils';
 
 interface Worker {
   employeeId?: string;
@@ -125,42 +117,82 @@ export default function ReportForm({
 
   // 初期データまたはオフラインデータの読み込み
   useEffect(() => {
-    if (initialData) {
-      let reportDate: string;
-      if (initialData.reportDate?.toDate) {
-        const date = initialData.reportDate.toDate();
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        reportDate = `${year}-${month}-${day}`;
-      } else {
-        reportDate = initialData.reportDate || getTodayString();
-      }
+    const loadData = async () => {
+      if (initialData) {
+        // Firebase から取得したデータを読み込み
+        let reportDate: string;
+        if (initialData.reportDate?.toDate) {
+          const date = initialData.reportDate.toDate();
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          reportDate = `${year}-${month}-${day}`;
+        } else {
+          reportDate = initialData.reportDate || getTodayString();
+        }
 
-      // 作業員データを読み込み（1人目の氏名はログインユーザーで上書き）
-      let workers = initialData.workers?.length > 0
-        ? [...initialData.workers]
-        : [{ ...emptyWorker }];
+        // 作業員データを読み込み（1人目の氏名はログインユーザーで上書き）
+        let workers = initialData.workers?.length > 0
+          ? [...initialData.workers]
+          : [{ ...emptyWorker }];
 
-      // 1人目は常にログインユーザー
-      workers[0] = {
-        ...workers[0],
-        employeeId: loggedInEmployeeId,
-        name: loggedInUserName,
-      };
+        // 1人目は常にログインユーザー
+        workers[0] = {
+          ...workers[0],
+          employeeId: loggedInEmployeeId,
+          name: loggedInUserName,
+        };
 
-      setFormData({
-        reportDate,
-        siteId: initialData.siteId || '',
-        siteName: initialData.siteName || '',
-        weather: initialData.weather || '',
-        workers,
-        notes: initialData.notes || '',
-        photos: initialData.photos || [],
-      });
-    } else if (!reportId) {
-      // 新規作成時はオフラインデータを確認
-      loadOffline('new').then((localDraft) => {
+        setFormData({
+          reportDate,
+          siteId: initialData.siteId || '',
+          siteName: initialData.siteName || '',
+          weather: initialData.weather || '',
+          workers,
+          notes: initialData.notes || '',
+          photos: initialData.photos || [],
+        });
+      } else if (initialLocalReportId) {
+        // ローカルストレージから保存済みの日報を読み込み
+        console.log('[ReportForm] ローカルレポートを読み込み中:', initialLocalReportId);
+        const localReport = await getLocalReport(initialLocalReportId);
+        if (localReport && localReport.formData) {
+          console.log('[ReportForm] ローカルレポート読み込み完了:', {
+            status: localReport.status,
+            hasPhotos: localReport.formData.photos?.length || 0,
+            hasLocalPhotos: localReport.localPhotos?.length || 0,
+          });
+
+          const loadedData = localReport.formData;
+          // 1人目は常にログインユーザーで上書き
+          if (loadedData.workers && loadedData.workers.length > 0) {
+            loadedData.workers[0] = {
+              ...loadedData.workers[0],
+              employeeId: loggedInEmployeeId,
+              name: loggedInUserName,
+            };
+          }
+
+          setFormData({
+            reportDate: loadedData.reportDate || getTodayString(),
+            siteId: loadedData.siteId || '',
+            siteName: loadedData.siteName || '',
+            weather: loadedData.weather || '',
+            workers: loadedData.workers || [{ ...emptyWorker, employeeId: loggedInEmployeeId, name: loggedInUserName }],
+            notes: loadedData.notes || '',
+            photos: loadedData.photos || [],
+          });
+
+          // ローカル写真情報も復元
+          if (localReport.localPhotos && localReport.localPhotos.length > 0) {
+            setLocalPhotos(localReport.localPhotos);
+          }
+        } else {
+          console.log('[ReportForm] ローカルレポートが見つかりません');
+        }
+      } else if (!reportId) {
+        // 新規作成時はオフラインデータを確認
+        const localDraft = await loadOffline('new');
         if (localDraft && localDraft.formData) {
           const loadedData = localDraft.formData;
           // 1人目は常にログインユーザーで上書き
@@ -183,9 +215,11 @@ export default function ReportForm({
             }],
           }));
         }
-      });
-    }
-  }, [initialData, reportId, loggedInUserName, loggedInEmployeeId]);
+      }
+    };
+
+    loadData();
+  }, [initialData, reportId, initialLocalReportId, loggedInUserName, loggedInEmployeeId]);
 
   // ログインユーザー名が変わったら1人目の作業員名を更新
   useEffect(() => {
@@ -263,7 +297,7 @@ export default function ReportForm({
       companyId,
       siteId: formData.siteId,
       siteName: formData.siteName,
-      reportDate: forOffline ? reportDate?.toISOString() : Timestamp.fromDate(reportDate!),
+      reportDate: forOffline ? reportDate?.toISOString() : firestore.Timestamp.fromDate(reportDate!),
       createdBy: currentUser!.uid,
       createdByName: userInfo?.displayName || userInfo?.email || '',
       workers: formData.workers.map((w) => ({
@@ -295,7 +329,7 @@ export default function ReportForm({
     }
 
     if (!forOffline) {
-      data.updatedAt = serverTimestamp();
+      data.updatedAt = firestore.FieldValue.serverTimestamp();
     }
 
     return data;
@@ -327,6 +361,11 @@ export default function ReportForm({
       };
 
       // 常にローカルに保存
+      console.log(`[handleSaveDraft] localReportId=${localReportId}, localPhotos.length=${localPhotos.length}`);
+      localPhotos.forEach((lp, i) => {
+        console.log(`[handleSaveDraft]   localPhoto[${i}]: path=${lp.localPath}, fileName=${lp.fileName}`);
+      });
+
       const localReport: LocalReport = {
         localId: localReportId,
         companyId: companyId!,
@@ -345,29 +384,50 @@ export default function ReportForm({
           const data = buildReportData(false, !!reportId);
 
           if (reportId) {
-            await updateDoc(doc(db, 'companies', companyId!, 'dailyReports', reportId), {
-              ...data,
-              updatedAt: serverTimestamp(),
-            });
+            await firestore()
+              .collection('companies')
+              .doc(companyId!)
+              .collection('dailyReports')
+              .doc(reportId)
+              .update({
+                ...data,
+                updatedAt: firestore.FieldValue.serverTimestamp(),
+              });
           } else {
-            data.createdAt = serverTimestamp();
-            const docRef = await addDoc(collection(db, 'companies', companyId!, 'dailyReports'), data);
+            data.createdAt = firestore.FieldValue.serverTimestamp();
+            const docRef = await firestore()
+              .collection('companies')
+              .doc(companyId!)
+              .collection('dailyReports')
+              .add(data);
             // ローカル日報にFirebase IDを紐付け
             localReport.firebaseId = docRef.id;
             await saveLocalReport(localReport);
           }
           await clearOffline('new');
-          onSaved?.();
+          try {
+            onSaved?.();
+          } catch (navErr) {
+            console.warn('onSaved callback error:', navErr);
+          }
         } catch (firebaseErr) {
           console.error('Firebase保存エラー:', firebaseErr);
           Alert.alert('保存完了', 'ローカルに保存しました。ネットワークエラーのため、Firebase保存は後で同期されます。');
-          onSaved?.();
+          try {
+            onSaved?.();
+          } catch (navErr) {
+            console.warn('onSaved callback error:', navErr);
+          }
         }
       } else {
         // オフライン：ローカルのみ
         await clearOffline('new');
         Alert.alert('保存完了', 'オフラインのため、ローカルに保存しました。');
-        onSaved?.();
+        try {
+          onSaved?.();
+        } catch (navErr) {
+          console.warn('onSaved callback error:', navErr);
+        }
       }
     } catch (err) {
       console.error('保存エラー:', err);
@@ -403,6 +463,11 @@ export default function ReportForm({
       };
 
       // 常にローカルに保存
+      console.log(`[handleProceedToSign] localReportId=${localReportId}, localPhotos.length=${localPhotos.length}`);
+      localPhotos.forEach((lp, i) => {
+        console.log(`[handleProceedToSign]   localPhoto[${i}]: path=${lp.localPath}, fileName=${lp.fileName}`);
+      });
+
       const localReport: LocalReport = {
         localId: localReportId,
         companyId: companyId!,
@@ -423,13 +488,22 @@ export default function ReportForm({
           const data = buildReportData(false, !!reportId);
 
           if (reportId) {
-            await updateDoc(doc(db, 'companies', companyId!, 'dailyReports', reportId), {
-              ...data,
-              updatedAt: serverTimestamp(),
-            });
+            await firestore()
+              .collection('companies')
+              .doc(companyId!)
+              .collection('dailyReports')
+              .doc(reportId)
+              .update({
+                ...data,
+                updatedAt: firestore.FieldValue.serverTimestamp(),
+              });
           } else {
-            data.createdAt = serverTimestamp();
-            const docRef = await addDoc(collection(db, 'companies', companyId!, 'dailyReports'), data);
+            data.createdAt = firestore.FieldValue.serverTimestamp();
+            const docRef = await firestore()
+              .collection('companies')
+              .doc(companyId!)
+              .collection('dailyReports')
+              .add(data);
             newReportId = docRef.id;
             // ローカル日報にFirebase IDを紐付け
             localReport.firebaseId = newReportId;
@@ -587,17 +661,21 @@ export default function ReportForm({
               <Text style={styles.label}>
                 現場名 <Text style={styles.required}>*</Text>
               </Text>
+              {/* デバッグ表示（本番では非表示）
               <TouchableOpacity onPress={() => setShowSitesDebug(!showSitesDebug)}>
                 <Text style={styles.debugToggle}>
                   {showSitesDebug ? 'デバッグ非表示' : 'デバッグ表示'}
                 </Text>
               </TouchableOpacity>
+              */}
             </View>
+            {/* デバッグ情報（本番では非表示）
             {showSitesDebug && sitesDebugInfo && (
               <View style={styles.sitesDebugContainer}>
                 <Text style={styles.sitesDebugText} selectable>{sitesDebugInfo}</Text>
               </View>
             )}
+            */}
             <ModalPicker
               selectedValue={formData.siteId}
               onValueChange={handleSiteChange}
@@ -662,6 +740,12 @@ export default function ReportForm({
             reportId={reportId}
             photos={formData.photos}
             onChange={(photos, newLocalPhotos) => {
+              console.log(`[ReportForm] 写真変更: photos=${photos.length}, newLocalPhotos=${newLocalPhotos?.length || 0}`);
+              if (newLocalPhotos) {
+                newLocalPhotos.forEach((lp, i) => {
+                  console.log(`[ReportForm]   localPhoto[${i}]: ${lp.localPath}`);
+                });
+              }
               setFormData((prev) => ({ ...prev, photos }));
               if (newLocalPhotos) {
                 setLocalPhotos(newLocalPhotos);

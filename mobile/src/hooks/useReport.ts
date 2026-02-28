@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import firestore from '@react-native-firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
+import { extractSnapshot } from '../utils/firestoreUtils';
 
 export interface Report {
   id: string;
@@ -55,15 +55,19 @@ export function useReport(reportId: string | undefined): UseReportResult {
     }
 
     setLoading(true);
-    const reportRef = doc(db, 'companies', companyId, 'dailyReports', reportId);
+    const reportRef = firestore()
+      .collection('companies')
+      .doc(companyId)
+      .collection('dailyReports')
+      .doc(reportId);
 
-    const unsubscribe = onSnapshot(
-      reportRef,
+    const unsubscribe = reportRef.onSnapshot(
       (snapshot) => {
-        if (snapshot.exists()) {
+        const { exists: docExists, data: docData } = extractSnapshot(snapshot);
+        if (docExists) {
           setReport({
             id: snapshot.id,
-            ...snapshot.data(),
+            ...docData,
           } as Report);
           setError(null);
         } else {
@@ -71,7 +75,13 @@ export function useReport(reportId: string | undefined): UseReportResult {
         }
         setLoading(false);
       },
-      (err) => {
+      (err: any) => {
+        // permission-deniedエラーはログアウト時に発生する想定内のエラーなので無視
+        if (err?.code === 'firestore/permission-denied') {
+          console.log('[useReport] 権限エラー（ログアウト中の可能性）');
+          setLoading(false);
+          return;
+        }
         console.error('日報取得エラー:', err);
         setError(err);
         setLoading(false);

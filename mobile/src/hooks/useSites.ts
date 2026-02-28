@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import firestore from '@react-native-firebase/firestore';
 import NetInfo from '@react-native-community/netinfo';
-import { db } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { cacheSites, getCachedSites } from '../utils/storageUtils';
 
@@ -41,8 +40,9 @@ export function useSites(): UseSitesResult {
         logs.push(`[1] Fetching sites for companyId: ${companyId}`);
 
         // ネットワーク状態を確認
+        // Android では isInternetReachable が null を返すことがあるため !== false で判定
         const netState = await NetInfo.fetch();
-        const isOnline = netState.isConnected && netState.isInternetReachable;
+        const isOnline = netState.isConnected && netState.isInternetReachable !== false;
         logs.push(`[2] Network status: ${isOnline ? 'online' : 'offline'}`);
 
         let allSites: Site[] = [];
@@ -50,8 +50,11 @@ export function useSites(): UseSitesResult {
         if (isOnline) {
           // オンライン：Firebaseから取得してキャッシュに保存
           try {
-            const sitesRef = collection(db, 'companies', companyId, 'sites');
-            const snapshot = await getDocs(sitesRef);
+            const snapshot = await firestore()
+              .collection('companies')
+              .doc(companyId)
+              .collection('sites')
+              .get();
             logs.push(`[3] Total docs fetched from Firebase: ${snapshot.docs.length}`);
 
             allSites = snapshot.docs.map((doc) => {

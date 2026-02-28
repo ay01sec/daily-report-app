@@ -1,22 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import functions, { firebase as firebaseFunctions } from '@react-native-firebase/functions';
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-  doc,
-  getDoc,
-  updateDoc,
-  serverTimestamp,
-} from 'firebase/firestore';
+import firestore from '@react-native-firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
-import { db } from '../config/firebase';
+import { getSnapshotExists, getSnapshotData } from '../utils/firestoreUtils';
 
 interface UserInfo {
   id: string;
@@ -129,17 +120,17 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
 
       if (token) {
         // 現在のFirestoreのトークンを確認
-        const userDocRef = doc(db, 'companies', companyDocId, 'users', userId);
-        const userDocSnap = await getDoc(userDocRef);
-        const currentToken = userDocSnap.data()?.fcmToken;
+        const userDocRef = firestore().collection('companies').doc(companyDocId).collection('users').doc(userId);
+        const userDocSnap = await userDocRef.get();
+        const currentToken = getSnapshotData(userDocSnap)?.fcmToken;
 
         if (currentToken === token) {
           console.log('FCMトークンは既に最新です');
         } else {
           // Firestoreにトークンを保存
-          await updateDoc(userDocRef, {
+          await userDocRef.update({
             fcmToken: token,
-            fcmTokenUpdatedAt: serverTimestamp(),
+            fcmTokenUpdatedAt: firestore.FieldValue.serverTimestamp(),
           });
           console.log('FCMトークンを保存しました（新規/更新）');
         }
@@ -150,10 +141,10 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
       // トークン更新時のリスナーを設定
       messaging().onTokenRefresh(async (newToken) => {
         console.log('FCMトークンが更新されました:', newToken.substring(0, 30) + '...');
-        const userDocRef = doc(db, 'companies', companyDocId, 'users', userId);
-        await updateDoc(userDocRef, {
+        const userDocRef = firestore().collection('companies').doc(companyDocId).collection('users').doc(userId);
+        await userDocRef.update({
           fcmToken: newToken,
-          fcmTokenUpdatedAt: serverTimestamp(),
+          fcmTokenUpdatedAt: firestore.FieldValue.serverTimestamp(),
         });
         console.log('更新されたFCMトークンを保存しました');
       });
@@ -180,13 +171,20 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
       }
     } catch (claimError) {
       console.warn('Custom Claim設定に失敗:', claimError);
+      // ユーザーに通知（写真アップロードなどで問題が発生する可能性あり）
+      Alert.alert(
+        '注意',
+        '認証情報の設定に失敗しました。写真のアップロードで問題が発生する場合は、再度ログインしてください。',
+        [{ text: 'OK' }]
+      );
     }
   }
 
   async function findCompanyByCode(companyCode: string): Promise<CompanyInfo> {
-    const companiesRef = collection(db, 'companies');
-    const q = query(companiesRef, where('companyCode', '==', companyCode));
-    const snapshot = await getDocs(q);
+    const snapshot = await firestore()
+      .collection('companies')
+      .where('companyCode', '==', companyCode)
+      .get();
 
     if (snapshot.empty) {
       throw new Error('企業IDが見つかりません');
@@ -195,7 +193,7 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
     const companyDoc = snapshot.docs[0];
     return {
       id: companyDoc.id,
-      ...companyDoc.data(),
+      ...getSnapshotData(companyDoc),
     } as CompanyInfo;
   }
 
@@ -205,17 +203,17 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
     const user = userCredential.user;
 
     try {
-      const userDocRef = doc(db, 'companies', company.id, 'users', user.uid);
-      const userDocSnap = await getDoc(userDocRef);
+      const userDocRef = firestore().collection('companies').doc(company.id).collection('users').doc(user.uid);
+      const userDocSnap = await userDocRef.get();
 
-      if (!userDocSnap.exists()) {
+      if (!getSnapshotExists(userDocSnap)) {
         await auth().signOut();
         throw new Error('この企業IDに登録されていないユーザーです');
       }
 
-      const userData = userDocSnap.data();
+      const userData = getSnapshotData(userDocSnap);
 
-      if (!userData.isActive) {
+      if (!userData?.isActive) {
         await auth().signOut();
         throw new Error('このアカウントは無効化されています');
       }
@@ -226,8 +224,8 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
         throw new Error('日報アプリへのアクセス権限がありません');
       }
 
-      await updateDoc(userDocRef, {
-        lastLoginAt: serverTimestamp(),
+      await userDocRef.update({
+        lastLoginAt: firestore.FieldValue.serverTimestamp(),
       });
 
       setCompanyId(company.id);
@@ -265,17 +263,24 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
 
   async function fetchUserInfo(uid: string): Promise<void> {
     try {
-      const companiesRef = collection(db, 'companies');
-      const companiesSnapshot = await getDocs(companiesRef);
+      console.log('[fetchUserInfo] 開始 uid:', uid);
+      const companiesSnapshot = await firestore().collection('companies').get();
+      console.log('[fetchUserInfo] 企業数:', companiesSnapshot.docs.length);
 
       for (const companyDoc of companiesSnapshot.docs) {
-        const userDocRef = doc(db, 'companies', companyDoc.id, 'users', uid);
-        const userDocSnap = await getDoc(userDocRef);
+        console.log('[fetchUserInfo] 企業チェック:', companyDoc.id);
+        const userDocRef = firestore().collection('companies').doc(companyDoc.id).collection('users').doc(uid);
+        const userDocSnap = await userDocRef.get();
 
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data();
+        const docExists = getSnapshotExists(userDocSnap);
+        console.log('[fetchUserInfo] ユーザー存在:', docExists);
+        if (docExists) {
+          const userData = getSnapshotData(userDocSnap);
+          console.log('[fetchUserInfo] userData:', JSON.stringify(userData));
+          console.log('[fetchUserInfo] isActive:', userData?.isActive, 'type:', typeof userData?.isActive);
 
-          if (!userData.isActive) {
+          if (!userData?.isActive) {
+            console.log('[fetchUserInfo] isActiveチェック失敗 - 値:', userData?.isActive);
             throw new Error('このアカウントは無効化されています');
           }
 
@@ -284,14 +289,14 @@ export function AuthProvider({ children, fallback }: AuthProviderProps) {
             throw new Error('日報アプリへのアクセス権限がありません');
           }
 
-          await updateDoc(userDocRef, {
-            lastLoginAt: serverTimestamp(),
+          await userDocRef.update({
+            lastLoginAt: firestore.FieldValue.serverTimestamp(),
           });
 
           setCompanyId(companyDoc.id);
           setCompanyInfo({
             id: companyDoc.id,
-            ...companyDoc.data(),
+            ...getSnapshotData(companyDoc),
           } as CompanyInfo);
           setUserInfo({
             id: uid,

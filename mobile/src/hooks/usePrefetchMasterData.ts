@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import firestore from '@react-native-firebase/firestore';
 import NetInfo from '@react-native-community/netinfo';
-import { db } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { cacheSites, cacheEmployees, getCachedSites, getCachedEmployees } from '../utils/storageUtils';
 
@@ -30,16 +29,21 @@ export function usePrefetchMasterData(): PrefetchResult {
 
     try {
       // ネットワーク状態を確認
+      // Android では isInternetReachable が null を返すことがあるため !== false で判定
       const netState = await NetInfo.fetch();
-      const isOnline = netState.isConnected && netState.isInternetReachable;
+      const isOnline = netState.isConnected && netState.isInternetReachable !== false;
 
       if (isOnline) {
         // オンライン：Firebaseから取得してキャッシュに保存
         console.log('[Prefetch] オンライン - Firebaseからマスターデータを取得中...');
 
         // 現場データを取得
-        const sitesRef = collection(db, 'companies', companyId, 'sites');
-        const sitesSnapshot = await getDocs(sitesRef);
+        const sitesSnapshot = await firestore()
+          .collection('companies')
+          .doc(companyId)
+          .collection('sites')
+          .get();
+
         const sites = sitesSnapshot.docs.map((doc) => {
           const docData = doc.data();
           return {
@@ -55,8 +59,12 @@ export function usePrefetchMasterData(): PrefetchResult {
         console.log(`[Prefetch] 現場データ: ${sites.length}件をキャッシュしました`);
 
         // 従業員データを取得
-        const employeesRef = collection(db, 'companies', companyId, 'employees');
-        const employeesSnapshot = await getDocs(employeesRef);
+        const employeesSnapshot = await firestore()
+          .collection('companies')
+          .doc(companyId)
+          .collection('employees')
+          .get();
+
         const employees = employeesSnapshot.docs.map((doc) => {
           const docData = doc.data();
           return {

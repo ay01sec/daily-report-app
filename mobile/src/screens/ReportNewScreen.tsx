@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RouteProp } from '@react-navigation/native';
 import Header from '../components/common/Header';
 import ReportForm from '../components/report/ReportForm';
 import SignatureModal from '../components/report/SignatureModal';
 
 type RootStackParamList = {
   Home: undefined;
-  ReportNew: undefined;
+  ReportNew: { localId?: string } | undefined;
   ReportEdit: { id: string };
 };
 
 type ReportNewScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'ReportNew'>;
+  route: RouteProp<RootStackParamList, 'ReportNew'>;
 };
 
 interface FormData {
@@ -25,7 +27,11 @@ interface FormData {
   photos: any[];
 }
 
-export default function ReportNewScreen({ navigation }: ReportNewScreenProps) {
+export default function ReportNewScreen({ navigation, route }: ReportNewScreenProps) {
+  // ローカルレポート編集の場合はlocalIdが渡される
+  const localId = route.params?.localId;
+  const isEditing = !!localId;
+
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [currentReportId, setCurrentReportId] = useState<string | null>(null);
   const [currentLocalReportId, setCurrentLocalReportId] = useState<string | null>(null);
@@ -68,12 +74,13 @@ export default function ReportNewScreen({ navigation }: ReportNewScreenProps) {
       <Header />
       <View style={styles.content}>
         <View style={styles.titleRow}>
-          <Text style={styles.title}>新規日報作成</Text>
+          <Text style={styles.title}>{isEditing ? '日報編集（未同期）' : '新規日報作成'}</Text>
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text style={styles.backButton}>戻る</Text>
           </TouchableOpacity>
         </View>
         <ReportForm
+          localReportId={localId}
           onSignatureRequest={handleSignatureRequest}
           onSaved={handleSaved}
         />
