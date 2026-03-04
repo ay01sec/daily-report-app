@@ -29,7 +29,7 @@ export default function PhotoUploader({ reportId, photos = [], onChange, disable
         const fileName = `${Date.now()}_${file.name}`;
         const storagePath = `companies/${companyId}/reports/${reportId || 'draft'}/photos/${fileName}`;
         const storageRef = ref(storage, storagePath);
-        await uploadBytes(storageRef, file);
+        await uploadBytes(storageRef, file, { contentType: file.type });
         const url = await getDownloadURL(storageRef);
         newPhotos.push({ url, path: storagePath, name: file.name });
       }
