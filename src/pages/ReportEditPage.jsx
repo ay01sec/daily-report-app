@@ -15,8 +15,9 @@ import { useReport } from '../hooks/useReport';
 export default function ReportEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { companyId } = useAuth();
+  const { companyId, isServiceRestricted, getBillingStatus } = useAuth();
   const { report, loading, error } = useReport(id);
+  const serviceRestricted = isServiceRestricted();
 
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -117,7 +118,7 @@ export default function ReportEditPage() {
   }
 
   const isSigned = report.status === 'signed';
-  const canEdit = report.status === 'draft' || report.status === 'rejected';
+  const canEdit = (report.status === 'draft' || report.status === 'rejected') && !serviceRestricted;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -125,7 +126,7 @@ export default function ReportEditPage() {
       <main className="px-4 py-6 max-w-lg mx-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-gray-900">
-            {canEdit ? '日報編集' : 'サイン済み日報'}
+            {canEdit ? '日報編集' : serviceRestricted ? '日報（閲覧のみ）' : 'サイン済み日報'}
           </h2>
           <button
             onClick={() => navigate('/')}
@@ -134,6 +135,18 @@ export default function ReportEditPage() {
             戻る
           </button>
         </div>
+
+        {/* サービス制限警告 */}
+        {serviceRestricted && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+            <p className="font-medium text-red-800">
+              {getBillingStatus() === 'expired' ? 'トライアル期間が終了しました' : 'サービスが停止されています'}
+            </p>
+            <p className="text-sm text-red-700 mt-1">
+              日報の編集・送信ができません。管理者にお問い合わせください。
+            </p>
+          </div>
+        )}
 
         {report.status === 'rejected' && report.rejection?.reason && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
@@ -153,29 +166,31 @@ export default function ReportEditPage() {
               imageUrl={report.clientSignature.imageUrl}
               signedAt={report.clientSignature.signedAt}
               signerName={report.clientSignature.signerName}
-              onRedo={handleRedoSignature}
+              onRedo={serviceRestricted ? null : handleRedoSignature}
             />
 
-            <div className="mt-6 bg-blue-50 rounded-xl p-4 border border-blue-200">
-              <p className="text-blue-800 font-medium mb-4">
-                この日報を送信しますか？
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={handleSaveLater}
-                  className="flex-1 py-3 border border-gray-300 bg-white rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
-                >
-                  あとで送信する
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
-                >
-                  {submitting ? '送信中...' : '送信する'}
-                </button>
+            {!serviceRestricted && (
+              <div className="mt-6 bg-blue-50 rounded-xl p-4 border border-blue-200">
+                <p className="text-blue-800 font-medium mb-4">
+                  この日報を送信しますか？
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleSaveLater}
+                    className="flex-1 py-3 border border-gray-300 bg-white rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    あとで送信する
+                  </button>
+                  <button
+                    onClick={handleSubmit}
+                    disabled={submitting}
+                    className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {submitting ? '送信中...' : '送信する'}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 

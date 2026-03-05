@@ -1,11 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/common/Header';
 import ReportForm from '../components/report/ReportForm';
 import SignatureModal from '../components/report/SignatureModal';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function ReportNewPage() {
   const navigate = useNavigate();
+  const { isServiceRestricted } = useAuth();
+
+  // サービス制限時はホームにリダイレクト
+  useEffect(() => {
+    if (isServiceRestricted()) {
+      navigate('/', { replace: true });
+    }
+  }, [isServiceRestricted, navigate]);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [currentReportId, setCurrentReportId] = useState(null);
   const [currentFormData, setCurrentFormData] = useState(null);

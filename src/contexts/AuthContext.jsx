@@ -227,6 +227,17 @@ export function AuthProvider({ children }) {
     return ['admin', 'office', 'manager', 'site_manager'].includes(userInfo?.role);
   }
 
+  // サービス制限チェック（expired または suspended の場合は制限）
+  function isServiceRestricted() {
+    const status = companyInfo?.billing?.status;
+    return ['expired', 'suspended'].includes(status);
+  }
+
+  // 課金ステータス取得
+  function getBillingStatus() {
+    return companyInfo?.billing?.status || 'trial';
+  }
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
@@ -256,6 +267,8 @@ export function AuthProvider({ children }) {
     resetPassword,
     isAdmin,
     isManagerOrAbove,
+    isServiceRestricted,
+    getBillingStatus,
     loading
   };
 

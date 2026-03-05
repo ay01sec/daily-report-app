@@ -64,7 +64,8 @@ function SubmissionStatusBanner({ reports, companyInfo }) {
 }
 
 export default function HomePage() {
-  const { currentUser, companyId, companyInfo } = useAuth();
+  const { currentUser, companyId, companyInfo, isServiceRestricted, getBillingStatus } = useAuth();
+  const serviceRestricted = isServiceRestricted();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -147,7 +148,19 @@ export default function HomePage() {
         <main className="px-4 py-6 max-w-lg mx-auto">
           <NotificationPrompt />
 
-        {!loading && (
+          {/* サービス制限警告 */}
+          {serviceRestricted && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+              <p className="font-medium text-red-800">
+                {getBillingStatus() === 'expired' ? 'トライアル期間が終了しました' : 'サービスが停止されています'}
+              </p>
+              <p className="text-sm text-red-700 mt-1">
+                日報の作成・編集ができません。管理者にお問い合わせください。
+              </p>
+            </div>
+          )}
+
+        {!loading && !serviceRestricted && (
           <SubmissionStatusBanner reports={reports} companyInfo={companyInfo} />
         )}
 
@@ -176,12 +189,18 @@ export default function HomePage() {
             ))}
           </select>
 
-          <Link
-            to="/reports/new"
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors shadow-sm"
-          >
-            + 新規作成
-          </Link>
+          {serviceRestricted ? (
+            <span className="bg-gray-400 text-white px-4 py-2 rounded-lg font-medium text-sm cursor-not-allowed shadow-sm">
+              + 新規作成
+            </span>
+          ) : (
+            <Link
+              to="/reports/new"
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors shadow-sm"
+            >
+              + 新規作成
+            </Link>
+          )}
         </div>
 
         {loading ? (
@@ -189,12 +208,14 @@ export default function HomePage() {
         ) : reports.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500 mb-4">この月の日報はありません</p>
-            <Link
-              to="/reports/new"
-              className="text-blue-600 hover:text-blue-800 font-medium"
-            >
-              新しい日報を作成する
-            </Link>
+            {!serviceRestricted && (
+              <Link
+                to="/reports/new"
+                className="text-blue-600 hover:text-blue-800 font-medium"
+              >
+                新しい日報を作成する
+              </Link>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
