@@ -91,6 +91,27 @@
 
 ---
 
+## 技術スタック
+
+| カテゴリ | 技術 |
+|---------|------|
+| フレームワーク | React 19 / Vite 7 |
+| スタイリング | Tailwind CSS 4 |
+| バックエンド | Firebase (Auth, Firestore, Storage, Hosting) |
+| PWA | vite-plugin-pwa / Workbox |
+| E2Eテスト | Playwright |
+
+## 開発コマンド
+
+```bash
+npm run dev      # 開発サーバー起動
+npm run build    # プロダクションビルド
+npm run lint     # ESLint実行
+npm run test:e2e # E2Eテスト実行
+```
+
+---
+
 ## 環境変数
 
 ### フロントエンド (`.env`)
@@ -119,6 +140,7 @@ VITE_FIREBASE_APP_ID=...
 
 | 日付 | 内容 |
 |------|------|
+| 2026-04-01 | 技術スタック情報追加、npm audit fix実施 |
 | 2026-02-06 | リアルタイムステータス監視追加 |
 | 2026-02-06 | PDF・QRコード表示機能追加 |
 | 2026-02-06 | ホーム画面ガイダンス追加 |
