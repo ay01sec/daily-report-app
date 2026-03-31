@@ -26,7 +26,7 @@ export default function TermsOfService() {
           <p className="text-xs text-gray-500 mb-4">最終更新日: 2026年2月10日</p>
 
           <p className="text-sm text-gray-600 mb-6">
-            本利用規約（以下「本規約」）は、<strong>業務改善屋さん</strong>（以下「当社」）が提供する作業日報アプリ -CDS-（以下「本アプリ」）の利用条件を定めるものです。本アプリをご利用いただく前に、本規約をよくお読みください。
+            本利用規約（以下「本規約」）は、<strong>AYBDX株式会社</strong>（以下「当社」）が提供する作業日報アプリ -CDS-（以下「本アプリ」）の利用条件を定めるものです。本アプリをご利用いただく前に、本規約をよくお読みください。
           </p>
 
           <Section title="1. 定義">
@@ -131,7 +131,7 @@ export default function TermsOfService() {
           </Section>
 
           <Section title="14. お問い合わせ">
-            <p><strong>業務改善屋さん</strong><br />メール: y_akagi@improve-biz.com</p>
+            <p><strong>AYBDX株式会社</strong><br />メール: y_akagi@improve-biz.com</p>
           </Section>
         </div>
       </main>

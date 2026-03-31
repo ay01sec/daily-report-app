@@ -35,7 +35,7 @@ export default function TermsOfServiceScreen({ navigation }: TermsOfServiceScree
           <Text style={styles.updated}>最終更新日: 2026年2月10日</Text>
 
           <Text style={styles.p}>
-            本利用規約（以下「本規約」）は、<Text style={styles.bold}>業務改善屋さん</Text>（以下「当社」）が提供する作業日報アプリ -CDS-（以下「本アプリ」）の利用条件を定めるものです。本アプリをご利用いただく前に、本規約をよくお読みください。
+            本利用規約（以下「本規約」）は、<Text style={styles.bold}>AYBDX株式会社</Text>（以下「当社」）が提供する作業日報アプリ -CDS-（以下「本アプリ」）の利用条件を定めるものです。本アプリをご利用いただく前に、本規約をよくお読みください。
           </Text>
 
           <View style={styles.divider} />
@@ -302,7 +302,7 @@ export default function TermsOfServiceScreen({ navigation }: TermsOfServiceScree
           <Text style={styles.h2}>16. お問い合わせ</Text>
           <Text style={styles.p}>
             本規約に関するお問い合わせは、下記までご連絡ください。{'\n\n'}
-            <Text style={styles.bold}>業務改善屋さん</Text>{'\n'}
+            <Text style={styles.bold}>AYBDX株式会社</Text>{'\n'}
             メール: y_akagi@improve-biz.com
           </Text>
         </View>

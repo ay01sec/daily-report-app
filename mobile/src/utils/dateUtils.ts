@@ -77,7 +77,7 @@ export function getTodayString(): string {
 export function generateTimeOptions(): string[] {
   const options: string[] = [];
   for (let h = 0; h < 24; h++) {
-    for (let m = 0; m < 60; m += 30) {
+    for (let m = 0; m < 60; m += 15) {
       const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
       options.push(time);
     }

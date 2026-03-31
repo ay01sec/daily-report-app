@@ -26,7 +26,7 @@ export default function PrivacyPolicy() {
           <p className="text-xs text-gray-500 mb-4">最終更新日: 2026年2月10日</p>
 
           <p className="text-sm text-gray-600 mb-6">
-            <strong>業務改善屋さん</strong>（以下「当社」）は、作業日報アプリ -CDS-（以下「本アプリ」）において、お客様の個人情報の保護に努めています。本プライバシーポリシーは、当社が収集する情報、その利用方法、およびお客様の権利について説明します。
+            <strong>AYBDX株式会社</strong>（以下「当社」）は、作業日報アプリ -CDS-（以下「本アプリ」）において、お客様の個人情報の保護に努めています。本プライバシーポリシーは、当社が収集する情報、その利用方法、およびお客様の権利について説明します。
           </p>
 
           <Section title="1. 収集する情報">
@@ -120,7 +120,7 @@ export default function PrivacyPolicy() {
 
           <Section title="9. お問い合わせ">
             <p>個人情報の取り扱いに関するお問い合わせは、下記までご連絡ください。</p>
-            <p><strong>業務改善屋さん</strong><br />個人情報保護管理者: 赤木恭哉<br />メール: y_akagi@improve-biz.com</p>
+            <p><strong>AYBDX株式会社</strong><br />個人情報保護管理者: 赤木恭哉<br />メール: y_akagi@improve-biz.com</p>
           </Section>
 
           <Section title="10. 準拠法・管轄">

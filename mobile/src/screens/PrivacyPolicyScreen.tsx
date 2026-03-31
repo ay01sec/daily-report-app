@@ -35,7 +35,7 @@ export default function PrivacyPolicyScreen({ navigation }: PrivacyPolicyScreenP
           <Text style={styles.updated}>最終更新日: 2026年2月10日</Text>
 
           <Text style={styles.p}>
-            <Text style={styles.bold}>業務改善屋さん</Text>（以下「当社」）は、作業日報アプリ -CDS-（以下「本アプリ」）において、お客様の個人情報の保護に努めています。本プライバシーポリシーは、当社が収集する情報、その利用方法、およびお客様の権利について説明します。
+            <Text style={styles.bold}>AYBDX株式会社</Text>（以下「当社」）は、作業日報アプリ -CDS-（以下「本アプリ」）において、お客様の個人情報の保護に努めています。本プライバシーポリシーは、当社が収集する情報、その利用方法、およびお客様の権利について説明します。
           </Text>
 
           <View style={styles.divider} />
@@ -162,7 +162,7 @@ export default function PrivacyPolicyScreen({ navigation }: PrivacyPolicyScreenP
           <Text style={styles.h2}>9. お問い合わせ</Text>
           <Text style={styles.p}>
             個人情報の取り扱いに関するお問い合わせは、下記までご連絡ください。{'\n\n'}
-            <Text style={styles.bold}>業務改善屋さん</Text>{'\n'}
+            <Text style={styles.bold}>AYBDX株式会社</Text>{'\n'}
             個人情報保護管理者: 赤木恭哉{'\n'}
             メール: y_akagi@improve-biz.com
           </Text>
